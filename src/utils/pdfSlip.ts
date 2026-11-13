@@ -272,12 +272,14 @@ function drawSingleSlipCopy(
     vx += tCols[0];
 
     // Material Description
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.2);
-    doc.text(truncateText(doc, item.description || (hasData ? '' : '—'), tCols[1] - 3), vx + 1.5, curY + 4.7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.3);
+    doc.text(truncateText(doc, item.description || (hasData ? '' : '—'), tCols[1] - 3), vx + 1.5, curY + 4.9);
     vx += tCols[1];
 
     // Pack Type
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.2);
     doc.text(truncateText(doc, item.pack || '', tCols[2] - 2), vx + tCols[2] / 2, curY + 4.7, { align: 'center' });
     vx += tCols[2];
 

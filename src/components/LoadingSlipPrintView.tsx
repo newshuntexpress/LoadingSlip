@@ -187,7 +187,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
                   <td className="border-r border-black text-center font-bold text-[9.5px]">
                     {index + 1}
                   </td>
-                  <td className="border-r border-black px-1.5 font-medium text-black truncate max-w-[200px]">
+                  <td className="border-r border-black px-1.5 font-bold text-[11.5px] text-black truncate max-w-[200px]">
                     {item.description || (hasData ? '' : '—')}
                   </td>
                   <td className="border-r border-black text-center px-1 font-medium">
