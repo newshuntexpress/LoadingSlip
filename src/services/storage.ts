@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   TICKETS: 'mat_loading_tickets_v1',
   DRIVERS: 'mat_loading_drivers_v1',
   SETTINGS: 'mat_loading_settings_v1',
+  DEFAULT_SETTINGS: 'mat_loading_default_settings_v1',
 };
 
 export const DEFAULT_SETTINGS: CompanySettings = {
@@ -249,14 +250,31 @@ function generateSampleTickets(): TicketRecord[] {
 
 // STORAGE API
 export const StorageService = {
+  getDefaultSettings(): CompanySettings {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.DEFAULT_SETTINGS);
+      if (data) {
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
+      }
+    } catch (e) {
+      console.error('Failed to load default settings:', e);
+    }
+    return DEFAULT_SETTINGS;
+  },
+
+  saveAsDefaultSettings(settings: CompanySettings): void {
+    localStorage.setItem(STORAGE_KEYS.DEFAULT_SETTINGS, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  },
+
   getSettings(): CompanySettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (data) return JSON.parse(data);
+      if (data) return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
-    return DEFAULT_SETTINGS;
+    return this.getDefaultSettings();
   },
 
   saveSettings(settings: CompanySettings): void {

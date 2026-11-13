@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
-import { Settings, Plus, Trash2, Save, X, Building, DoorOpen } from 'lucide-react';
+import { Settings, Plus, Trash2, Save, X, DoorOpen, RotateCcw, BookmarkCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface SettingsModalProps {
   settings: CompanySettings;
@@ -24,28 +24,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [autoPrintTokenAfterSave, setAutoPrintTokenAfterSave] = useState(settings.autoPrintTokenAfterSave ?? true);
   const [gates, setGates] = useState<string[]>([...settings.gates]);
   const [newGateName, setNewGateName] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showFeedback = (type: 'success' | 'error', text: string) => {
+    setFeedback({ type, text });
+    setTimeout(() => setFeedback(null), 4000);
+  };
 
   const handleAddGate = () => {
-    if (!newGateName.trim()) return;
-    if (gates.includes(newGateName.trim())) {
-      alert('This gate already exists!');
+    const trimmed = newGateName.trim();
+    if (!trimmed) return;
+    if (gates.includes(trimmed)) {
+      showFeedback('error', 'This gate already exists!');
       return;
     }
-    setGates([...gates, newGateName.trim()]);
+    setGates([...gates, trimmed]);
     setNewGateName('');
+    setFeedback(null);
   };
 
   const handleRemoveGate = (gate: string) => {
     if (gates.length <= 1) {
-      alert('At least 1 gate must be configured!');
+      showFeedback('error', 'At least 1 gate must be configured!');
       return;
     }
     setGates(gates.filter((g) => g !== gate));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated: CompanySettings = {
+  const buildCurrentSettings = (): CompanySettings => {
+    const finalGates = [...gates];
+    const pendingGate = newGateName.trim();
+    if (pendingGate && !finalGates.includes(pendingGate)) {
+      finalGates.push(pendingGate);
+    }
+    return {
       companyName: companyName.trim() || 'Factory / Plant Name',
       companySubtitle: companySubtitle.trim(),
       address: address.trim(),
@@ -54,8 +66,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       gstin: gstin.trim(),
       ticketPrefix: ticketPrefix.trim().toUpperCase() || 'TK',
       autoPrintTokenAfterSave,
-      gates,
+      gates: finalGates,
     };
+  };
+
+  const handleSaveAsDefault = () => {
+    const updated = buildCurrentSettings();
+    setGates(updated.gates);
+    setNewGateName('');
+    StorageService.saveAsDefaultSettings(updated);
+    onSave(updated);
+    showFeedback('success', 'Current settings saved as Default! All fields and loading gates are now saved as default.');
+  };
+
+  const handleRestoreDefault = () => {
+    const def = StorageService.getDefaultSettings();
+    setCompanyName(def.companyName);
+    setCompanySubtitle(def.companySubtitle);
+    setAddress(def.address);
+    setPhone(def.phone);
+    setEmail(def.email);
+    setGstin(def.gstin);
+    setTicketPrefix(def.ticketPrefix || 'TK');
+    setAutoPrintTokenAfterSave(def.autoPrintTokenAfterSave ?? true);
+    setGates([...def.gates]);
+    setNewGateName('');
+    showFeedback('success', 'Loaded saved default settings into form. Click Save Settings to apply.');
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated = buildCurrentSettings();
     StorageService.saveSettings(updated);
     onSave(updated);
     onClose();
@@ -211,6 +252,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="text"
                 value={newGateName}
                 onChange={(e) => setNewGateName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddGate();
+                  }
+                }}
                 placeholder="New gate name e.g. Gate 5"
                 className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-neutral-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -225,22 +272,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
+          {feedback && (
+            <div
+              className={`flex items-center gap-2 p-2.5 rounded-xl text-xs font-semibold border ${
+                feedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-red-50 text-red-800 border-red-200'
+              }`}
+            >
+              {feedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              )}
+              <span>{feedback.text}</span>
+            </div>
+          )}
+
           {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-3 border-t border-neutral-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-800 rounded-lg hover:bg-neutral-100 transition cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-blue-700/30 transition active:scale-95 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Settings</span>
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-neutral-200">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-800 rounded-lg hover:bg-neutral-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreDefault}
+                className="flex items-center gap-1 px-3 py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition cursor-pointer"
+                title="Load saved default settings"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore Default</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveAsDefault}
+                className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition active:scale-95 cursor-pointer"
+                title="Save all current fields & loading gates as permanent default"
+              >
+                <BookmarkCheck className="w-4 h-4" />
+                <span>Save as Default</span>
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-blue-700/30 transition active:scale-95 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Settings</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

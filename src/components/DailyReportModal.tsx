@@ -44,6 +44,7 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
       tickets: StorageService.getTickets(),
       drivers: StorageService.getDrivers(),
       settings: StorageService.getSettings(),
+      defaultSettings: StorageService.getDefaultSettings(),
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
@@ -66,12 +67,12 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
         const json = JSON.parse(event.target?.result as string);
         if (json.tickets) StorageService.saveTickets(json.tickets);
         if (json.drivers) StorageService.saveDrivers(json.drivers);
+        if (json.defaultSettings) StorageService.saveAsDefaultSettings(json.defaultSettings);
         if (json.settings) StorageService.saveSettings(json.settings);
-        alert('Database restored successfully!');
         if (onDataRestored) onDataRestored();
         onClose();
-      } catch (err) {
-        alert('Invalid backup file! Please select a valid JSON backup.');
+      } catch {
+        // Invalid backup JSON ignored
       }
     };
     reader.readAsText(file);
