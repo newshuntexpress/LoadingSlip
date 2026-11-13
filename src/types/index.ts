@@ -9,6 +9,10 @@ export interface LoadingSlipItem {
   pallets: string;
   looseRolls: string;
   remarks?: string;
+  isLoaded?: boolean;
+  loadedQty?: string;
+  loadedAt?: number;
+  loadedByName?: string;
 }
 
 export interface LoadingSlipData {
@@ -21,8 +25,25 @@ export interface LoadingSlipData {
   preparedBy: string;
   checkedBy: string; // Now used for Forklift Operator / Loaded By
   loadedBy?: string;  // Forklift Operator / Loaded By
+  storeInchargeName?: string; // Logged-in user's full name for Store Incharge Signature
   driverSignatureNotes?: string;
   createdAt: string;
+  isLocked?: boolean;
+  loadingCompletedAt?: number;
+  loadingCompletedTime?: string;
+  loadingCompletedBy?: string;
+}
+
+export interface LoadingAlertNotification {
+  id: string;
+  ticketId: string;
+  ticketNumber: string;
+  delNoteNumber: string;
+  truckNumber: string;
+  gateNumber: string;
+  completedBy: string;
+  completedTime: string;
+  createdAt: number;
 }
 
 export interface TicketRecord {
@@ -49,6 +70,14 @@ export interface TicketRecord {
   priority?: 'normal' | 'urgent';
   createdAt: number;
   updatedAt: number;
+  autoLoadingMinutes?: number;
+  autoUnderLoadingAt?: number;
+  autoStatusUpdatedAt?: number;
+  autoUnderLoadingApplied?: boolean;
+  manualStatusOverride?: boolean;
+  version?: number;
+  createdBy?: string;
+  updatedBy?: string;
 }
 
 export interface DriverMasterRecord {
@@ -73,4 +102,65 @@ export interface CompanySettings {
   gates: string[]; // ["Gate 1", "Gate 2", "Gate 3", "Gate 4"]
   ticketPrefix: string;
   autoPrintTokenAfterSave?: boolean; // New setting
+  sessionIdleMinutes?: number;
 }
+
+export type UserRoleName = 'admin' | 'user' | 'forklift_operator';
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  roleId: string;
+  roleName: UserRoleName | string;
+  roleDisplayName: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: number | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  permissions: string[];
+  activeSessionCount?: number;
+}
+
+export interface PermissionOption {
+  id: string;
+  key: string;
+  name: string;
+  category: string;
+}
+
+export interface RoleOption {
+  id: string;
+  name: string;
+  displayName: string;
+  description?: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actorUserId: string | null;
+  actorUsername: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  details: string | null;
+  ipAddress: string | null;
+  createdAt: number;
+}
+
+export interface ActiveSessionInfo {
+  sessionRef: string;
+  userId: string;
+  username: string;
+  fullName: string;
+  roleName: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: number;
+  lastActivityAt: number;
+  expiresAt: number;
+}
+

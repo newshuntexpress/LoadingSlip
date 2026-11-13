@@ -224,11 +224,11 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between pt-2 border-t border-neutral-200">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-neutral-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-800 rounded-lg hover:bg-neutral-100 transition cursor-pointer"
+              className="app-btn w-full sm:w-auto sm:min-w-[110px] text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300"
             >
               Cancel
             </button>
@@ -236,11 +236,11 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
             <button
               type="button"
               onClick={handleSend}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-600/30 transition active:scale-95 cursor-pointer"
+              className="app-btn w-full sm:w-auto sm:min-w-[170px] bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-4 h-4 shrink-0" />
               <span>Send via WhatsApp</span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+              <ExternalLink className="w-3.5 h-3.5 opacity-75 shrink-0" />
             </button>
           </div>
         </div>

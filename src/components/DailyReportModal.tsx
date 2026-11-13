@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { TicketRecord, CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
+import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import { FileSpreadsheet, Printer, Download, Upload, X, CheckCircle2, Clock, Calendar, BarChart3 } from 'lucide-react';
 
@@ -8,6 +9,7 @@ interface DailyReportModalProps {
   tickets: TicketRecord[];
   settings: CompanySettings;
   date: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onDataRestored?: () => void;
 }
@@ -16,6 +18,7 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
   tickets,
   settings,
   date,
+  isAdmin = false,
   onClose,
   onDataRestored,
 }) => {
@@ -39,22 +42,21 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
     StorageService.exportToCSV(dayTickets, date);
   };
 
-  const handleBackupDatabase = () => {
-    const allData = {
-      tickets: StorageService.getTickets(),
-      drivers: StorageService.getDrivers(),
-      settings: StorageService.getSettings(),
-      defaultSettings: StorageService.getDefaultSettings(),
-      exportedAt: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Loading_Database_Backup_${date}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleBackupDatabase = async () => {
+    try {
+      const allData = await ApiClient.exportBackup();
+      const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Loading_Database_Backup_${date}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Handled by global auth/error layer
+    }
   };
 
   const handleRestoreDatabase = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,17 +64,14 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        if (json.tickets) StorageService.saveTickets(json.tickets);
-        if (json.drivers) StorageService.saveDrivers(json.drivers);
-        if (json.defaultSettings) StorageService.saveAsDefaultSettings(json.defaultSettings);
-        if (json.settings) StorageService.saveSettings(json.settings);
+        await ApiClient.restoreBackup(json);
         if (onDataRestored) onDataRestored();
         onClose();
       } catch {
-        // Invalid backup JSON ignored
+        // Invalid backup JSON or unauthorized ignored
       }
     };
     reader.readAsText(file);
@@ -114,44 +113,49 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
           </div>
 
           {/* Action Bar (CSV & Print & Backup) - hidden on print */}
-          <div className="print:hidden flex flex-wrap items-center justify-between gap-2.5 bg-neutral-50 p-3 rounded-xl border border-neutral-200">
-            <div className="flex items-center gap-2">
+          <div className="print:hidden flex flex-col md:flex-row md:items-center md:justify-between gap-2 bg-neutral-50 p-3 rounded-xl border border-neutral-200">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleExportCSV}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+                className="app-btn w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 shrink-0" />
                 <span>Export Daily CSV / Excel</span>
               </button>
 
               <button
+                type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm transition active:scale-95 cursor-pointer"
+                className="app-btn w-full md:w-auto bg-neutral-900 hover:bg-neutral-800 text-white shadow-sm"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-4 h-4 shrink-0" />
                 <span>Print Report / Save PDF</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleBackupDatabase}
-                className="text-xs font-semibold text-neutral-700 hover:text-neutral-900 bg-white border border-neutral-300 px-3 py-1.5 rounded-lg shadow-sm hover:bg-neutral-50 transition cursor-pointer"
+                className="app-btn w-full md:w-auto text-neutral-700 hover:text-neutral-900 bg-white border border-neutral-300 shadow-sm hover:bg-neutral-50"
               >
-                💾 JSON Backup
+                <span>JSON Backup</span>
               </button>
 
-              <label className="text-xs font-semibold text-neutral-700 hover:text-neutral-900 bg-white border border-neutral-300 px-3 py-1.5 rounded-lg shadow-sm hover:bg-neutral-50 transition cursor-pointer flex items-center gap-1">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Restore Backup</span>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".json"
-                  onChange={handleRestoreDatabase}
-                  className="hidden"
-                />
-              </label>
+              {isAdmin && (
+                <label className="app-btn w-full md:w-auto text-neutral-700 hover:text-neutral-900 bg-white border border-neutral-300 shadow-sm hover:bg-neutral-50">
+                  <Upload className="w-4 h-4 shrink-0" />
+                  <span>Restore Backup</span>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".json"
+                    onChange={handleRestoreDatabase}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
           </div>
 

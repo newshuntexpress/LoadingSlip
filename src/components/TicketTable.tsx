@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TicketRecord, TruckStatus } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import {
@@ -24,6 +24,9 @@ interface TicketTableProps {
   onOpenWhatsApp: (ticket: TicketRecord) => void;
   onStatusChange: (ticket: TicketRecord, newStatus: TruckStatus) => void;
   onDeleteTicket: (ticketId: string) => void;
+  canUpdate?: boolean;
+  canDelete?: boolean;
+  canPrint?: boolean;
 }
 
 export const TicketTable: React.FC<TicketTableProps> = ({
@@ -34,9 +37,20 @@ export const TicketTable: React.FC<TicketTableProps> = ({
   onOpenWhatsApp,
   onStatusChange,
   onDeleteTicket,
+  canUpdate = true,
+  canDelete = true,
+  canPrint = true,
 }) => {
   // Sequence Number Sorting: Ascending (1, 2, 3...) by default
   const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const sortedTickets = [...tickets].sort((a, b) => {
     const seqA = a.sequenceNumber || 0;
@@ -146,13 +160,15 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                   {/* Ticket Number*/ }
                   <td className="py-3 px-3">
                     <span className="font-extrabold text-blue-900 block">{t.ticketNumber}</span>
-                    <button
-                      onClick={() => onPrintTicket(t)}
-                      className="text-[10px] text-neutral-500 hover:text-blue-700 font-medium inline-flex items-center gap-0.5 cursor-pointer mt-0.5"
-                    >
-                      <Printer className="w-3 h-3" />
-                      <span>Print Token</span>
-                    </button>
+                    {canPrint && (
+                      <button
+                        onClick={() => onPrintTicket(t)}
+                        className="text-[10px] text-neutral-500 hover:text-blue-700 font-medium inline-flex items-center gap-0.5 cursor-pointer mt-0.5"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Print Token</span>
+                      </button>
+                    )}
                   </td>
 
                   {/* Gate Number & Gate Sequence Number*/ }
@@ -191,17 +207,19 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                     <div className="flex flex-col items-center gap-1">
                       {getStatusBadge(t.status)}
                       {/* Quick Status Toggle Dropdown */}
-                      <select
-                        value={t.status}
-                        onChange={(e) => onStatusChange(t, e.target.value as TruckStatus)}
-                        className="text-[10px] py-0.5 px-1.5 rounded border border-neutral-300 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                      >
-                        <option value="waiting">Waiting</option>
-                        <option value="called">Called</option>
-                        <option value="under_loading">Under Loading</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                      {canUpdate && (
+                        <select
+                          value={t.status}
+                          onChange={(e) => onStatusChange(t, e.target.value as TruckStatus)}
+                          className="text-[10px] py-0.5 px-1.5 rounded border border-neutral-300 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        >
+                          <option value="waiting">Waiting</option>
+                          <option value="called">Called</option>
+                          <option value="under_loading">Under Loading</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      )}
                     </div>
                   </td>
 
@@ -238,8 +256,27 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                     <div className="text-neutral-600">
                       <span className="font-semibold text-neutral-800">In:</span> {t.timeIn}
                     </div>
+                    {t.status === 'waiting' && t.createdAt && !t.manualStatusOverride && !t.autoUnderLoadingApplied && (() => {
+                      const targetAt = t.autoUnderLoadingAt || (t.createdAt + (t.autoLoadingMinutes || 30) * 60 * 1000);
+                      const remainingMin = Math.max(0, Math.ceil((targetAt - nowMs) / 60000));
+                      return (
+                        <div className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                          {remainingMin > 0 ? `Auto Loading in ${remainingMin}m` : 'Auto Loading soon...'}
+                        </div>
+                      );
+                    })()}
+                    {t.timeLoadingStarted && (
+                      <div className="text-amber-700 font-semibold mt-0.5">
+                        <span>Load:</span> {t.timeLoadingStarted}
+                        {t.autoUnderLoadingApplied && !t.manualStatusOverride && (
+                          <span className="ml-1 text-[9.5px] bg-amber-100 text-amber-800 px-1 rounded font-bold">
+                            Auto
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {t.timeCompleted && (
-                      <div className="text-emerald-700 font-bold">
+                      <div className="text-emerald-700 font-bold mt-0.5">
                         <span>Done:</span> {t.timeCompleted}
                       </div>
                     )}
@@ -247,51 +284,59 @@ export const TicketTable: React.FC<TicketTableProps> = ({
 
                   {/* Actions */}
                   <td className="py-3 px-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-center gap-1.5 sm:flex-wrap">
                       {/* WhatsApp Button */}
                       <button
+                        type="button"
                         onClick={() => onOpenWhatsApp(t)}
-                        className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+                        className="app-btn-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
                         title="Send WhatsApp Alert to Driver"
                       >
-                        <MessageSquare className="w-3.5 h-3.5" />
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0" />
                         <span>WhatsApp</span>
                       </button>
 
                       {/* Loading Slip Button */}
-                      <button
-                        onClick={() => onOpenLoadingSlip(t)}
-                        className="flex items-center gap-1 bg-blue-700 hover:bg-blue-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
-                        title="Generate or edit 8-row loading slip"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>{slip ? 'Edit Slip' : 'Create Slip'}</span>
-                      </button>
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenLoadingSlip(t)}
+                          className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white shadow-sm"
+                          title="Generate or edit 8-row loading slip"
+                        >
+                          <FileText className="w-3.5 h-3.5 shrink-0" />
+                          <span>{slip ? 'Edit Slip' : 'Create Slip'}</span>
+                        </button>
+                      )}
 
                       {/* Print 2-Copy A4 Slip */}
-                      {(slip || t.delNoteNumber) && (
+                      {canPrint && (slip || t.delNoteNumber) && (
                         <button
+                          type="button"
                           onClick={() => onPrintLoadingSlip(t)}
-                          className="flex items-center gap-1 bg-neutral-800 hover:bg-neutral-900 text-white px-2 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+                          className="app-btn-sm bg-neutral-800 hover:bg-neutral-900 text-white shadow-sm"
                           title="Print 2-Copy A4 Single Sheet Preview"
                         >
-                          <Printer className="w-3.5 h-3.5 text-amber-300" />
+                          <Printer className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                           <span>Print Slip</span>
                         </button>
                       )}
 
                       {/* Delete */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteTicket(t.id);
-                        }}
-                        className="flex items-center gap-1 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 hover:border-red-600 px-2 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
-                        title={`Delete Ticket #${t.sequenceNumber} (${t.truckNumber})`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Delete</span>
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteTicket(t.id);
+                          }}
+                          className="app-btn-sm bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 hover:border-red-600 shadow-sm"
+                          title={`Delete Ticket #${t.sequenceNumber} (${t.truckNumber})`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Delete</span>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

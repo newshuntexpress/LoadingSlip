@@ -9,15 +9,18 @@ import { Printer, Download, X, Scissors, CheckCircle2 } from 'lucide-react';
 interface LoadingSlipPrintViewProps {
   ticket: TicketRecord;
   settings: CompanySettings;
+  storeInchargeFullName?: string;
   onClose: () => void;
 }
 
 export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
   ticket,
   settings,
+  storeInchargeFullName,
   onClose,
 }) => {
   const slip = ticket.loadingSlip;
+  const displayStoreInchargeName = (storeInchargeFullName || slip?.storeInchargeName || '').trim();
   const items = slip?.items || [];
   // Ensure we always have 8 rows
   const paddedItems = Array.from({ length: 8 }, (_, i) => {
@@ -36,7 +39,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
   const [pdfNotice, setPdfNotice] = useState<string | null>(null);
 
   const handleSavePDF = () => {
-    generateLoadingSlipPDF(ticket, settings);
+    generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName);
     setPdfNotice('2-Copy A4 PDF downloaded! Open the PDF file to view or print.');
     setTimeout(() => setPdfNotice(null), 5000);
   };
@@ -58,7 +61,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
     setTimeout(() => {
       window.removeEventListener('beforeprint', onBeforePrint);
       if (!printDialogOpened) {
-        generateLoadingSlipPDF(ticket, settings);
+        generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName);
         setPdfNotice('2-Copy A4 PDF downloaded (preview frame restricts browser print popup). Open the PDF to print!');
         setTimeout(() => setPdfNotice(null), 6000);
       }
@@ -237,17 +240,27 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
       {/* Footer Signatures */}
       <div className="mt-1 pt-1 border-t border-black">
         <div className="grid grid-cols-2 gap-3 text-center text-[9.5px]">
-          <div className="border border-black/50 p-1 rounded bg-white">
+          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[48px]">
             <p className="font-bold text-gray-800">Forklift Operator / Loaded By</p>
-            <div className="h-7 flex items-end justify-center font-medium text-gray-900 text-[9px]">
-              {slip?.checkedBy ? slip.checkedBy : ''}
+            <div>
+              <div className="h-5 flex items-end justify-center font-medium text-gray-900 text-[9px]">
+                {slip?.checkedBy ? slip.checkedBy : ''}
+              </div>
+              <div className="border-t border-dashed border-gray-400"></div>
             </div>
-            <div className="border-t border-dashed border-gray-400"></div>
           </div>
-          <div className="border border-black/50 p-1 rounded bg-white">
+          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[48px]">
             <p className="font-bold text-gray-800">Store Incharge Signature</p>
-            <div className="h-7 flex items-end justify-center"></div>
-            <div className="border-t border-dashed border-gray-400"></div>
+            <div>
+              <div className="h-3.5"></div>
+              <div className="border-t border-dashed border-gray-400 pt-0.5 min-h-[14px] flex items-center justify-center">
+                {displayStoreInchargeName ? (
+                  <span className="font-bold text-black text-[10px] leading-tight">
+                    {displayStoreInchargeName}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -257,35 +270,38 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
   return createPortal(
     <div className="loading-slip-print-root fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-sm flex items-start justify-center pt-16 pb-8 px-2 sm:px-4">
       {/* Top action toolbar (hidden when printing) */}
-      <div className="print-toolbar print:hidden fixed top-3 right-4 z-50 flex items-center gap-2.5 bg-neutral-900/95 backdrop-blur-md text-white px-4 py-2.5 rounded-xl shadow-2xl border border-neutral-700">
-        <div className="text-xs hidden sm:block">
+      <div className="print-toolbar print:hidden fixed top-3 right-3 left-3 sm:left-auto z-50 flex flex-wrap items-center justify-between sm:justify-end gap-2 bg-neutral-900/95 backdrop-blur-md text-white px-3.5 py-2.5 rounded-xl shadow-2xl border border-neutral-700">
+        <div className="text-xs hidden lg:block mr-1">
           <span className="font-bold text-amber-400">A4 Print Preview:</span> Exact 1 Page (Original + Duplicate 2-Copy)
         </div>
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-lg shadow transition active:scale-95 cursor-pointer"
-        >
-          <Printer className="w-4 h-4" />
-          <span>Print / Save PDF (1 Sheet, 2 Copies)</span>
-        </button>
-        <button
-          type="button"
-          onClick={handleSavePDF}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-3 py-2 rounded-lg shadow transition active:scale-95 cursor-pointer"
-          title="Download 2-Copy A4 PDF directly"
-        >
-          <Download className="w-4 h-4" />
-          <span>Save PDF</span>
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition cursor-pointer"
-          title="Close Preview"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="app-btn flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-500 text-white shadow"
+          >
+            <Printer className="w-4 h-4 shrink-0" />
+            <span>Print / Save PDF (1 Sheet, 2 Copies)</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSavePDF}
+            className="app-btn flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-500 text-white shadow"
+            title="Download 2-Copy A4 PDF directly"
+          >
+            <Download className="w-4 h-4 shrink-0" />
+            <span>Save PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="app-btn bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700"
+            title="Close Preview"
+          >
+            <X className="w-4 h-4 shrink-0" />
+            <span>Close</span>
+          </button>
+        </div>
       </div>
 
       {/* PDF Download Confirmation Banner */}

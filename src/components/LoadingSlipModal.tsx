@@ -17,6 +17,7 @@ export const PACK_DROPDOWN_OPTIONS = [
 interface LoadingSlipModalProps {
   ticket: TicketRecord;
   settings: CompanySettings;
+  storeInchargeFullName?: string;
   onSave: (updatedTicket: TicketRecord, openPrintDirectly?: boolean) => void;
   onClose: () => void;
 }
@@ -24,10 +25,13 @@ interface LoadingSlipModalProps {
 export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   ticket,
   settings,
+  storeInchargeFullName,
   onSave,
   onClose,
 }) => {
   const existingSlip = ticket.loadingSlip;
+  const isSlipLocked = Boolean(existingSlip?.isLocked);
+  const displayStoreInchargeName = (storeInchargeFullName || existingSlip?.storeInchargeName || '').trim();
 
   const [delNoteNumber, setDelNoteNumber] = useState<string>(
     existingSlip?.delNoteNumber || ticket.delNoteNumber || 'A1DD00001'
@@ -200,11 +204,18 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       totalLooseRolls,
       preparedBy: preparedBy.trim(),
       checkedBy: checkedBy.trim(),
+      storeInchargeName: displayStoreInchargeName,
       createdAt: existingSlip?.createdAt || new Date().toISOString().split('T')[0],
     };
   };
 
   const handleSaveOnly = (printDirectly = false) => {
+    if (isSlipLocked) {
+      if (printDirectly) {
+        onSave(ticket, true);
+      }
+      return;
+    }
     if (!delNoteNumber.trim()) {
       alert('Please enter Delivery Note / Challan Number!');
       return;
@@ -259,6 +270,17 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
 
         {/* Form Body */}
         <div className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {isSlipLocked && (
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-950 rounded-xl p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="font-extrabold">🔒 Loading Completed &amp; Locked</span>
+                <span className="ml-1.5 text-emerald-800">
+                  Completed by <strong>{existingSlip?.loadingCompletedBy || existingSlip?.checkedBy || 'Operator'}</strong>
+                  {existingSlip?.loadingCompletedTime ? ` on ${existingSlip.loadingCompletedTime}` : ''}. Materials and quantities are locked against accidental edits.
+                </span>
+              </div>
+            </div>
+          )}
           {/* Header Metadata Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">
             <div>
@@ -562,8 +584,8 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
             </div>
           </div>
 
-          {/* Forklift Operator / Loaded By details */}
-          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200">
+          {/* Signatures & Operator details */}
+          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-neutral-700 block mb-1">
                 Forklift Operator / Loaded By
@@ -575,6 +597,15 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                 placeholder="Leave blank or enter name"
                 className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
               />
+            </div>
+
+            <div>
+              <span className="text-xs font-semibold text-neutral-700 block mb-1">
+                Store Incharge Signature
+              </span>
+              <div className="w-full px-3 py-1.5 text-xs font-bold text-neutral-900 rounded-lg border border-neutral-300 bg-neutral-100/80 min-h-[30px] flex items-center">
+                {displayStoreInchargeName || '—'}
+              </div>
             </div>
           </div>
 
@@ -594,32 +625,34 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-200">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-neutral-200">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-800 rounded-lg hover:bg-neutral-100 transition cursor-pointer"
+              className="app-btn w-full sm:w-auto sm:min-w-[110px] text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300"
             >
               Cancel
             </button>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={() => handleSaveOnly(false)}
-                className="flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-900 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow transition active:scale-95 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save Loading Slip</span>
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
+              {!isSlipLocked && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveOnly(false)}
+                  className="app-btn w-full bg-neutral-800 hover:bg-neutral-900 text-white shadow"
+                >
+                  <Save className="w-4 h-4 shrink-0" />
+                  <span>Save Loading Slip</span>
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={() => handleSaveOnly(true)}
-                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-blue-700/30 transition active:scale-95 cursor-pointer"
+                className="app-btn w-full bg-blue-700 hover:bg-blue-600 text-white shadow-lg shadow-blue-700/30"
               >
-                <Printer className="w-4 h-4" />
-                <span>Save & Print 2-Copy A4</span>
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>{isSlipLocked ? 'Print 2-Copy A4' : 'Save & Print 2-Copy A4'}</span>
               </button>
             </div>
           </div>

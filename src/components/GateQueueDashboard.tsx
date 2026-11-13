@@ -24,6 +24,56 @@ interface GateQueueDashboardProps {
   onCompleteLoading: (ticket: TicketRecord) => void;
   onOpenLoadingSlip: (ticket: TicketRecord) => void;
   onOpenWhatsApp: (ticket: TicketRecord, templateId?: string) => void;
+  canUpdate?: boolean;
+  canPrint?: boolean;
+}
+
+function extractNum(val?: string | number | null): number {
+  if (val === undefined || val === null || val === '') return 0;
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+  const match = String(val).match(/(\d+(\.\d+)?)/);
+  return match ? parseFloat(match[1]) : 0;
+}
+
+function formatAfterPalletsSummary(slip: NonNullable<TicketRecord['loadingSlip']>): string {
+  const items = slip.items || [];
+  let looseRolls = 0;
+  let cans = 0;
+  let drums = 0;
+  let boards = 0;
+  let otherLoose = 0;
+
+  for (const row of items) {
+    const pack = (row.pack || '').trim().toLowerCase();
+    const qty = extractNum(row.qty);
+    const loose = extractNum(row.looseRolls);
+
+    if (pack === 'can' || pack === 'cans') {
+      cans += loose > 0 ? loose : qty;
+    } else if (pack === 'drum' || pack === 'drums') {
+      drums += loose > 0 ? loose : qty;
+    } else if (pack === 'board' || pack === 'boards') {
+      boards += loose > 0 ? loose : qty;
+    } else if (pack === 'rolls' || pack === 'roll' || pack === '') {
+      looseRolls += loose;
+    } else {
+      otherLoose += loose;
+    }
+  }
+
+  const parts: string[] = [];
+  const hasPackSpecific = cans > 0 || drums > 0 || boards > 0;
+  const combinedLooseRolls = looseRolls + otherLoose;
+
+  if (combinedLooseRolls > 0 || !hasPackSpecific) {
+    const lr = hasPackSpecific ? combinedLooseRolls : (slip.totalLooseRolls ?? combinedLooseRolls);
+    parts.push(`${lr} Loose Rolls`);
+  }
+  if (cans > 0) parts.push(`${cans} ${cans === 1 ? 'Can' : 'Cans'}`);
+  if (drums > 0) parts.push(`${drums} ${drums === 1 ? 'Drum' : 'Drums'}`);
+  if (boards > 0) parts.push(`${boards} ${boards === 1 ? 'Board' : 'Boards'}`);
+
+  return parts.join(' | ');
 }
 
 export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
@@ -35,6 +85,8 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
   onCompleteLoading,
   onOpenLoadingSlip,
   onOpenWhatsApp,
+  canUpdate = true,
+  canPrint = true,
 }) => {
   const dayTickets = tickets.filter((t) => t.date === date);
 
@@ -168,7 +220,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                         <span className="font-semibold text-neutral-800">Destination:</span> {currentLoading.destinationPlace || 'N/A'}
                         {currentLoading.loadingSlip ? (
                           <span className="ml-2 text-emerald-800 font-bold block mt-0.5">
-                            ✓ Slip Prepared ({currentLoading.loadingSlip.totalQty} Qty | {currentLoading.loadingSlip.totalPallets} Pallets)
+                            ✓ Slip Prepared ({currentLoading.loadingSlip.totalQty} Qty | {currentLoading.loadingSlip.totalPallets} Pallets | {formatAfterPalletsSummary(currentLoading.loadingSlip)})
                           </span>
                         ) : (
                           <span className="ml-2 text-red-600 font-semibold block mt-0.5">! Slip pending</span>
@@ -176,22 +228,30 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                       </div>
 
                       {/* Action buttons */}
-                      <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-amber-200">
-                        <button
-                          onClick={() => onOpenLoadingSlip(currentLoading)}
-                          className="flex items-center justify-center gap-1 bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 rounded-lg py-1.5 text-xs font-semibold shadow-sm transition cursor-pointer"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-blue-700" />
-                          <span>Edit / Print Slip</span>
-                        </button>
-                        <button
-                          onClick={() => onCompleteLoading(currentLoading)}
-                          className="flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg py-1.5 text-xs font-bold shadow-sm transition active:scale-95 cursor-pointer"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Complete</span>
-                        </button>
-                      </div>
+                      {(canUpdate || canPrint) && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-200">
+                          {canUpdate && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenLoadingSlip(currentLoading)}
+                              className="app-btn-sm w-full bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300 shadow-sm"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                              <span>Edit / Print Slip</span>
+                            </button>
+                          )}
+                          {canUpdate && (
+                            <button
+                              type="button"
+                              onClick={() => onCompleteLoading(currentLoading)}
+                              className="app-btn-sm w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Complete</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-neutral-50 border border-dashed border-neutral-300 rounded-xl p-3 text-center text-xs text-neutral-500">
@@ -224,19 +284,24 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 mt-2">
+                        {canUpdate && (
+                          <button
+                            type="button"
+                            onClick={() => onStartLoading(calledTruck)}
+                            className="app-btn-sm flex-1 bg-blue-700 hover:bg-blue-600 text-white shadow-sm"
+                          >
+                            <Play className="w-3.5 h-3.5 shrink-0" />
+                            <span>Start Loading</span>
+                          </button>
+                        )}
                         <button
-                          onClick={() => onStartLoading(calledTruck)}
-                          className="flex-1 flex items-center justify-center gap-1 bg-blue-700 hover:bg-blue-600 text-white rounded-lg py-1.5 text-xs font-bold transition active:scale-95 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Start Loading</span>
-                        </button>
-                        <button
+                          type="button"
                           onClick={() => onOpenWhatsApp(calledTruck, 'gate_call')}
-                          className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition cursor-pointer"
+                          className="app-btn-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
                           title="WhatsApp Reminder"
                         >
-                          <MessageSquare className="w-4 h-4" />
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                          <span>Alert</span>
                         </button>
                       </div>
                     </div>
@@ -272,21 +337,25 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
+                              type="button"
                               onClick={() => onOpenWhatsApp(truck, 'gate_call')}
-                              className="p-1 text-emerald-700 hover:bg-emerald-100 rounded transition cursor-pointer"
+                              className="app-btn-sm !px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
                               title="Send WhatsApp Alert"
                             >
-                              <MessageSquare className="w-3.5 h-3.5" />
+                              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
                             </button>
-                            <button
-                              onClick={() => onCallTruck(truck)}
-                              className="flex items-center gap-0.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg transition active:scale-95 cursor-pointer"
-                            >
-                              <span>Call</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
+                            {canUpdate && (
+                              <button
+                                type="button"
+                                onClick={() => onCallTruck(truck)}
+                                className="app-btn-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm"
+                              >
+                                <span>Call</span>
+                                <ArrowRight className="w-3 h-3 shrink-0" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}

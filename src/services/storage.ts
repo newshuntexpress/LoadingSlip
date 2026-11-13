@@ -248,85 +248,84 @@ function generateSampleTickets(): TicketRecord[] {
   ];
 }
 
-// STORAGE API
+// In-memory cache synchronized with authenticated backend API (wiped on logout)
+let cacheTickets: TicketRecord[] = [];
+let cacheDrivers: DriverMasterRecord[] = [];
+let cacheSettings: CompanySettings = DEFAULT_SETTINGS;
+let cacheDefaultSettings: CompanySettings = DEFAULT_SETTINGS;
+
+// STORAGE & CACHE API
 export const StorageService = {
-  getDefaultSettings(): CompanySettings {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.DEFAULT_SETTINGS);
-      if (data) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
-      }
-    } catch (e) {
-      console.error('Failed to load default settings:', e);
+  hydrateFromServer(payload: {
+    tickets?: TicketRecord[];
+    drivers?: DriverMasterRecord[];
+    settings?: CompanySettings | null;
+    defaultSettings?: CompanySettings | null;
+  }): void {
+    if (payload.tickets) {
+      cacheTickets = payload.tickets.map((t) => ({
+        ...t,
+        driverPhone: formatSaudiPhoneNumber(t.driverPhone),
+      }));
     }
-    return DEFAULT_SETTINGS;
+    if (payload.drivers) {
+      cacheDrivers = payload.drivers.map((d) => ({
+        ...d,
+        driverPhone: formatSaudiPhoneNumber(d.driverPhone),
+      }));
+    }
+    if (payload.defaultSettings) {
+      cacheDefaultSettings = { ...DEFAULT_SETTINGS, ...payload.defaultSettings };
+    }
+    if (payload.settings) {
+      cacheSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
+    }
+  },
+
+  clearCache(): void {
+    cacheTickets = [];
+    cacheDrivers = [];
+    cacheSettings = DEFAULT_SETTINGS;
+    cacheDefaultSettings = DEFAULT_SETTINGS;
+  },
+
+  getDefaultSettings(): CompanySettings {
+    return cacheDefaultSettings;
   },
 
   saveAsDefaultSettings(settings: CompanySettings): void {
-    localStorage.setItem(STORAGE_KEYS.DEFAULT_SETTINGS, JSON.stringify(settings));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    cacheDefaultSettings = { ...DEFAULT_SETTINGS, ...settings };
+    cacheSettings = { ...DEFAULT_SETTINGS, ...settings };
   },
 
   getSettings(): CompanySettings {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      if (data) return { ...DEFAULT_SETTINGS, ...JSON.parse(data) };
-    } catch (e) {
-      console.error('Failed to load settings:', e);
-    }
-    return this.getDefaultSettings();
+    return cacheSettings;
   },
 
   saveSettings(settings: CompanySettings): void {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    cacheSettings = { ...DEFAULT_SETTINGS, ...settings };
   },
 
   getTickets(): TicketRecord[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.TICKETS);
-      if (data) {
-        const parsed: TicketRecord[] = JSON.parse(data);
-        return parsed.map((t) => ({
-          ...t,
-          driverPhone: formatSaudiPhoneNumber(t.driverPhone),
-        }));
-      }
-    } catch (e) {
-      console.error('Failed to load tickets:', e);
-    }
-    // Seed initial records if empty
-    const initial = generateSampleTickets();
-    localStorage.setItem(STORAGE_KEYS.TICKETS, JSON.stringify(initial));
-    return initial;
+    return cacheTickets;
   },
 
   saveTickets(tickets: TicketRecord[]): void {
-    localStorage.setItem(STORAGE_KEYS.TICKETS, JSON.stringify(tickets));
+    cacheTickets = tickets.map((t) => ({
+      ...t,
+      driverPhone: formatSaudiPhoneNumber(t.driverPhone),
+    }));
   },
 
   getDrivers(): DriverMasterRecord[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.DRIVERS);
-      if (data) {
-        const parsed: DriverMasterRecord[] = JSON.parse(data);
-        return parsed.map((d) => ({
-          ...d,
-          driverPhone: formatSaudiPhoneNumber(d.driverPhone),
-        }));
-      }
-    } catch (e) {
-      console.error('Failed to load drivers:', e);
-    }
-    localStorage.setItem(STORAGE_KEYS.DRIVERS, JSON.stringify(SAMPLE_DRIVERS));
-    return SAMPLE_DRIVERS;
+    return cacheDrivers;
   },
 
   saveDrivers(drivers: DriverMasterRecord[]): void {
-    const normalized = drivers.map((d) => ({
+    cacheDrivers = drivers.map((d) => ({
       ...d,
       driverPhone: formatSaudiPhoneNumber(d.driverPhone),
     }));
-    localStorage.setItem(STORAGE_KEYS.DRIVERS, JSON.stringify(normalized));
   },
 
   // Save or update driver in master

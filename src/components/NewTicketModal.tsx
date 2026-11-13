@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TicketRecord, DriverMasterRecord, CompanySettings } from '../types';
-import { StorageService, getCurrentTimeString } from '../services/storage';
+import { StorageService, getCurrentTimeString, createEmpty8Rows } from '../services/storage';
+import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import { Ticket, Truck, User, Phone, MapPin, Building2, DoorOpen, Hash, AlertCircle, Save, Printer, MessageSquare, X, FileText } from 'lucide-react';
 
@@ -27,6 +28,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
   // Mandatory Delivery Note Number (Del Note No.)
   const [delNoteNumber, setDelNoteNumber] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [truckNumber, setTruckNumber] = useState('');
   const [driverName, setDriverName] = useState('');
   const [driverPhone, setDriverPhone] = useState('');
@@ -96,50 +99,68 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setShowSuggestions(false);
   };
 
-  const handleSubmit = (action?: 'print' | 'whatsapp') => {
+  const handleSubmit = async (action?: 'print' | 'whatsapp') => {
+    setFormError(null);
     if (!delNoteNumber.trim()) {
-      alert('Please enter Delivery Note Number (Del Note No.) * e.g. A1DD00001!\nTicket cannot be created without Delivery Note Number.');
+      setFormError('Please enter Delivery Note Number (Del Note No.) * e.g. A1DD00001. Ticket cannot be created without it.');
       return;
     }
     if (!truckNumber.trim()) {
-      alert('Please enter Vehicle / Truck Number!');
+      setFormError('Please enter Vehicle / Truck Number!');
       return;
     }
     if (!driverName.trim()) {
-      alert('Please enter Driver Name!');
+      setFormError('Please enter Driver Name!');
       return;
     }
     if (!driverPhone.trim()) {
-      alert('Please enter Driver Mobile Number!');
+      setFormError('Please enter Driver Mobile Number!');
       return;
     }
 
     const calculatedGateSeq = gateQueueInfo.myPositionAtGate;
-
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
+    const cleanDelNote = delNoteNumber.trim().toUpperCase();
 
-    const newTicket = StorageService.addTicket({
-      ticketNumber,
-      sequenceNumber: nextSeq,
-      date,
-      timeIn: getCurrentTimeString(),
-      gateNumber: selectedGate,
-      gateSequenceNumber: calculatedGateSeq,
-      delNoteNumber: delNoteNumber.trim().toUpperCase(),
-      truckNumber: truckNumber.trim().toUpperCase(),
-      driverName: driverName.trim(),
-      driverPhone: formattedPhone,
-      iqamaNumber: iqamaNumber.trim(),
-      transporterName: transporterName.trim(),
-      destinationPlace: destinationPlace.trim(),
-      status: 'waiting',
-      priority,
-      remarks: remarks.trim(),
-    });
+    setSubmitting(true);
+    try {
+      const newTicket = await ApiClient.createTicket({
+        ticketNumber,
+        sequenceNumber: nextSeq,
+        date,
+        timeIn: getCurrentTimeString(),
+        gateNumber: selectedGate,
+        gateSequenceNumber: calculatedGateSeq,
+        delNoteNumber: cleanDelNote,
+        truckNumber: truckNumber.trim().toUpperCase(),
+        driverName: driverName.trim(),
+        driverPhone: formattedPhone,
+        iqamaNumber: iqamaNumber.trim(),
+        transporterName: transporterName.trim(),
+        destinationPlace: destinationPlace.trim(),
+        status: 'waiting',
+        priority,
+        remarks: remarks.trim(),
+        loadingSlip: {
+          delNoteNumber: cleanDelNote,
+          placeName: destinationPlace.trim(),
+          preparedBy: '',
+          checkedBy: '',
+          items: createEmpty8Rows(),
+          totalQty: 0,
+          totalPallets: 0,
+          totalLooseRolls: 0,
+          createdAt: date,
+        },
+      });
 
-    // If no explicit action and autoPrintToken is true, trigger print automatically
-    const effectiveAction = action || (autoPrintToken ? 'print' : undefined);
-    onSave(newTicket, effectiveAction);
+      const effectiveAction = action || (autoPrintToken ? 'print' : undefined);
+      onSave(newTicket, effectiveAction);
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to generate ticket. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -451,42 +472,53 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </p>
           </div>
 
+          {formError && (
+            <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs font-semibold text-red-800 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-200">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 pt-3 border-t border-neutral-200">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-800 rounded-lg hover:bg-neutral-100 transition cursor-pointer"
+              disabled={submitting}
+              className="app-btn w-full md:w-auto md:min-w-[110px] text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300"
             >
               Cancel
             </button>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full md:w-auto">
               <button
                 type="button"
+                disabled={submitting}
                 onClick={() => handleSubmit('whatsapp')}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl shadow transition active:scale-95 cursor-pointer"
+                className="app-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow"
               >
-                <MessageSquare className="w-4 h-4" />
+                <MessageSquare className="w-4 h-4 shrink-0" />
                 <span>Save & Send WhatsApp</span>
               </button>
 
               <button
                 type="button"
+                disabled={submitting}
                 onClick={() => handleSubmit('print')}
-                className="flex items-center gap-1.5 bg-neutral-800 hover:bg-neutral-900 text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl shadow transition active:scale-95 cursor-pointer"
+                className="app-btn w-full bg-neutral-800 hover:bg-neutral-900 text-white shadow"
               >
-                <Printer className="w-4 h-4" />
+                <Printer className="w-4 h-4 shrink-0" />
                 <span>Save & Print Token</span>
               </button>
 
               <button
                 type="button"
+                disabled={submitting}
                 onClick={() => handleSubmit()}
-                className="flex items-center gap-1.5 bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-blue-700/30 transition active:scale-95 cursor-pointer"
+                className="app-btn w-full bg-blue-700 hover:bg-blue-600 text-white shadow-lg shadow-blue-700/30"
               >
-                <Save className="w-4 h-4" />
-                <span>Generate Ticket</span>
+                <Save className="w-4 h-4 shrink-0" />
+                <span>{submitting ? 'Saving...' : 'Generate Ticket'}</span>
               </button>
             </div>
           </div>

@@ -48,30 +48,32 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ ticket, settin
   return createPortal(
     <div className="ticket-print-root fixed inset-0 z-50 overflow-y-auto bg-black/75 flex items-center justify-center p-4">
       {/* Top action toolbar (hidden when printing) */}
-      <div className="print-toolbar print:hidden fixed top-3 right-4 z-50 flex items-center gap-2.5 bg-neutral-900/95 text-white px-4 py-2 rounded-xl shadow-2xl border border-neutral-700">
+      <div className="print-toolbar print:hidden fixed top-3 right-3 left-3 sm:left-auto z-50 flex flex-wrap items-center justify-end gap-2 bg-neutral-900/95 text-white px-3.5 py-2.5 rounded-xl shadow-2xl border border-neutral-700">
         <button
           type="button"
           onClick={handlePrint}
-          className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-lg shadow transition active:scale-95 cursor-pointer"
+          className="app-btn flex-1 sm:flex-initial bg-indigo-600 hover:bg-indigo-500 text-white shadow"
         >
-          <Printer className="w-4 h-4" />
+          <Printer className="w-4 h-4 shrink-0" />
           <span>Print Gate Token</span>
         </button>
         <button
           type="button"
           onClick={handleSavePDF}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-3 py-1.5 rounded-lg shadow transition active:scale-95 cursor-pointer"
+          className="app-btn flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-500 text-white shadow"
           title="Download Gate Token PDF"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-4 h-4 shrink-0" />
           <span>Save PDF</span>
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition cursor-pointer"
+          className="app-btn bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700"
+          title="Close Preview"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4 shrink-0" />
+          <span>Close</span>
         </button>
       </div>
 

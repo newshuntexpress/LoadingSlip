@@ -1,21 +1,25 @@
 import React, { useState } from 'react';
 import { DriverMasterRecord } from '../types';
 import { StorageService } from '../services/storage';
+import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import { Users, Truck, Plus, Trash2, Edit2, Search, Phone, Building2, MapPin, X, Save, Check } from 'lucide-react';
 
 interface DriverMasterModalProps {
   onClose: () => void;
   onSelectForNewTicket?: (driver: DriverMasterRecord) => void;
+  canManage?: boolean;
 }
 
 export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
   onClose,
   onSelectForNewTicket,
+  canManage = true,
 }) => {
   const [drivers, setDrivers] = useState<DriverMasterRecord[]>(() => StorageService.getDrivers());
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Form for new/edited driver
   const [truckNumber, setTruckNumber] = useState('');
@@ -70,34 +74,18 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
     setDefaultDestination('');
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    setErrorMsg(null);
     if (!truckNumber.trim() || !driverName.trim() || !driverPhone.trim()) {
-      alert('Please enter Vehicle Number, Driver Name, and Mobile Number!');
+      setErrorMsg('Please enter Vehicle Number, Driver Name, and Mobile Number!');
       return;
     }
 
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
 
-    if (editingId) {
-      const updated = drivers.map((d) =>
-        d.id === editingId
-          ? {
-              ...d,
-              truckNumber: truckNumber.trim().toUpperCase(),
-              driverName: driverName.trim(),
-              driverPhone: formattedPhone,
-              iqamaNumber: iqamaNumber.trim(),
-              transporterName: transporterName.trim(),
-              defaultDestination: defaultDestination.trim(),
-            }
-          : d
-      );
-      setDrivers(updated);
-      StorageService.saveDrivers(updated);
-      handleCancelEdit();
-    } else {
-      const newRecord: DriverMasterRecord = {
-        id: 'drv-' + Date.now(),
+    try {
+      const saved = await ApiClient.saveDriver({
+        ...(editingId ? { id: editingId } : {}),
         truckNumber: truckNumber.trim().toUpperCase(),
         driverName: driverName.trim(),
         driverPhone: formattedPhone,
@@ -105,19 +93,29 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
         transporterName: transporterName.trim(),
         defaultDestination: defaultDestination.trim(),
         lastVisited: new Date().toISOString().split('T')[0],
-        tripCount: 1,
-      };
-      const updated = [newRecord, ...drivers];
+      });
+
+      const updated = editingId
+        ? drivers.map((d) => (d.id === editingId ? saved : d))
+        : [saved, ...drivers.filter((d) => d.id !== saved.id)];
       setDrivers(updated);
       StorageService.saveDrivers(updated);
       handleCancelEdit();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to save driver record.');
     }
   };
 
-  const handleDelete = (id: string) => {
-    const updated = drivers.filter((d) => d.id !== id);
-    setDrivers(updated);
-    StorageService.saveDrivers(updated);
+  const handleDelete = async (id: string) => {
+    setErrorMsg(null);
+    try {
+      await ApiClient.deleteDriver(id);
+      const updated = drivers.filter((d) => d.id !== id);
+      setDrivers(updated);
+      StorageService.saveDrivers(updated);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to delete driver record.');
+    }
   };
 
   return (
@@ -145,7 +143,14 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
         </div>
 
         <div className="p-4 sm:p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-xs font-semibold">
+              {errorMsg}
+            </div>
+          )}
+
           {/* Add / Edit Form Card */}
+          {canManage && (
           <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-700 mb-3 flex items-center gap-1.5">
               {editingId ? <Edit2 className="w-4 h-4 text-blue-600" /> : <Plus className="w-4 h-4 text-emerald-600" />}
@@ -228,12 +233,12 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
                 />
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-3 flex items-center justify-end gap-2 pt-1">
+              <div className="sm:col-span-2 lg:col-span-3 flex flex-wrap items-center justify-end gap-2 pt-1">
                 {editingId && (
                   <button
                     type="button"
                     onClick={handleCancelEdit}
-                    className="px-4 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-700 text-xs font-semibold rounded-lg transition cursor-pointer"
+                    className="app-btn bg-neutral-200 hover:bg-neutral-300 text-neutral-700"
                   >
                     Cancel
                   </button>
@@ -241,14 +246,15 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs py-2 px-6 rounded-lg shadow transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  className="app-btn bg-neutral-900 hover:bg-neutral-800 text-white shadow"
                 >
-                  <Save className="w-3.5 h-3.5" />
+                  <Save className="w-3.5 h-3.5 shrink-0" />
                   <span>{editingId ? 'Update Record' : 'Save Driver & Vehicle'}</span>
                 </button>
               </div>
             </div>
           </div>
+          )}
 
           {/* Search bar & list */}
           <div className="flex items-center justify-between gap-3">
@@ -309,22 +315,30 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
                       </span>
                     </td>
                     <td className="py-2 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleStartEdit(d)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
-                          title="Edit record"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(d.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
-                          title="Delete record"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {canManage ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(d)}
+                            className="app-btn-sm bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                            title="Edit record"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(d.id)}
+                            className="app-btn-sm bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200"
+                            title="Delete record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-neutral-400">Read-only</span>
+                      )}
                     </td>
                   </tr>
                 ))}

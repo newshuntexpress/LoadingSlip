@@ -36,7 +36,8 @@ function drawSingleSlipCopy(
   ticket: TicketRecord,
   settings: CompanySettings,
   copyType: 'ORIGINAL (OFFICE USE)' | 'DUPLICATE (FOR FORKLIFT OPERATOR)',
-  yStart: number
+  yStart: number,
+  storeInchargeFullName?: string
 ) {
   const slip = ticket.loadingSlip;
   const items = slip?.items || [];
@@ -358,14 +359,14 @@ function drawSingleSlipCopy(
   doc.text(String(slip?.totalLooseRolls || 0), looseX + tCols[5] / 2, curY + 4.5, { align: 'center' });
 
   // Footer Signatures
-  const sigTopY = yStart + outerH - 21;
+  const sigTopY = yStart + outerH - 22;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
   doc.line(innerX, sigTopY, innerX + innerW, sigTopY);
 
   const boxY = sigTopY + 2;
   const boxW = (innerW - 6) / 2;
-  const boxH = 16;
+  const boxH = 17;
 
   // Box 1: Forklift Operator / Loaded By
   doc.setDrawColor(120, 120, 120);
@@ -380,28 +381,46 @@ function drawSingleSlipCopy(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.2);
     doc.setTextColor(0, 0, 0);
-    doc.text(truncateText(doc, slip.checkedBy, boxW - 8), innerX + boxW / 2, boxY + 11.5, { align: 'center' });
+    doc.text(truncateText(doc, slip.checkedBy, boxW - 8), innerX + boxW / 2, boxY + 12, { align: 'center' });
   }
   doc.setDrawColor(156, 163, 175);
   doc.setLineWidth(0.25);
-  drawDashedLine(doc, innerX + 3, boxY + 13.5, innerX + boxW - 3, boxY + 13.5, 1.5, 1.2);
+  drawDashedLine(doc, innerX + 3, boxY + 14.2, innerX + boxW - 3, boxY + 14.2, 1.5, 1.2);
 
   // Box 2: Store Incharge Signature
   const box2X = innerX + boxW + 6;
+  const inchargeFullName = (storeInchargeFullName || slip?.storeInchargeName || '').trim();
   doc.setDrawColor(120, 120, 120);
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(box2X, boxY, boxW, boxH, 1, 1, 'FD');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(31, 41, 55);
-  doc.text('Store Incharge Signature', box2X + boxW / 2, boxY + 4, { align: 'center' });
+  doc.text('Store Incharge Signature', box2X + boxW / 2, boxY + 3.8, { align: 'center' });
 
   doc.setDrawColor(156, 163, 175);
   doc.setLineWidth(0.25);
-  drawDashedLine(doc, box2X + 3, boxY + 13.5, box2X + boxW - 3, boxY + 13.5, 1.5, 1.2);
+  drawDashedLine(doc, box2X + 3, boxY + 11.2, box2X + boxW - 3, boxY + 11.2, 1.5, 1.2);
+
+  if (inchargeFullName) {
+    // Fit complete full name without truncation/shortening
+    let nameFontSize = 7.6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(nameFontSize);
+    while (nameFontSize > 5.5 && doc.getTextWidth(inchargeFullName) > boxW - 6) {
+      nameFontSize -= 0.3;
+      doc.setFontSize(nameFontSize);
+    }
+    doc.setTextColor(0, 0, 0);
+    doc.text(inchargeFullName, box2X + boxW / 2, boxY + 15.2, { align: 'center' });
+  }
 }
 
-export function generateLoadingSlipPDF(ticket: TicketRecord, settings: CompanySettings): void {
+export function generateLoadingSlipPDF(
+  ticket: TicketRecord,
+  settings: CompanySettings,
+  storeInchargeFullName?: string
+): void {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -409,7 +428,7 @@ export function generateLoadingSlipPDF(ticket: TicketRecord, settings: CompanySe
   });
 
   // Copy 1: Original (Top half, shifted 12mm down from top edge)
-  drawSingleSlipCopy(doc, ticket, settings, 'ORIGINAL (OFFICE USE)', 12);
+  drawSingleSlipCopy(doc, ticket, settings, 'ORIGINAL (OFFICE USE)', 12, storeInchargeFullName);
 
   // Middle Scissor Cut Line
   const cutY = 149.5;
@@ -428,7 +447,7 @@ export function generateLoadingSlipPDF(ticket: TicketRecord, settings: CompanySe
   doc.text('A4 DUAL COPY SHEET', 203, cutY + 1, { align: 'right' });
 
   // Copy 2: Duplicate (Bottom half)
-  drawSingleSlipCopy(doc, ticket, settings, 'DUPLICATE (FOR FORKLIFT OPERATOR)', 155);
+  drawSingleSlipCopy(doc, ticket, settings, 'DUPLICATE (FOR FORKLIFT OPERATOR)', 155, storeInchargeFullName);
 
   const fileIdentifier = (ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber || ticket.ticketNumber).replace(
     /[^a-zA-Z0-9_-]/g,
