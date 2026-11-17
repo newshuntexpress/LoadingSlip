@@ -2,6 +2,7 @@ import {
   TicketRecord,
   DriverMasterRecord,
   CompanySettings,
+  PublicBranding,
   AuthUser,
   UserRoleName,
   RoleOption,
@@ -9,6 +10,9 @@ import {
   AuditLogEntry,
   ActiveSessionInfo,
   LoadingAlertNotification,
+  LiquidStoreState,
+  LiquidStoreSettings,
+  ExFactoryEntry,
 } from '../types';
 
 const SESSION_TOKEN_STORAGE_KEY = 'gp_tab_session_token';
@@ -116,12 +120,14 @@ export const ApiClient = {
     needsSetup: boolean;
     user?: AuthUser;
     csrfToken?: string;
+    branding?: PublicBranding;
   }> {
     const res = await request<{
       authenticated: boolean;
       needsSetup: boolean;
       user?: AuthUser;
       csrfToken?: string;
+      branding?: PublicBranding;
     }>('/api/auth/status', {}, true);
     if (res.csrfToken) setCsrfToken(res.csrfToken);
     if (!res.authenticated) setSessionToken(null);
@@ -428,5 +434,183 @@ export const ApiClient = {
     } catch {
       // Migration is best-effort for legacy local data
     }
+  },
+
+  // Liquid Material Camp Store
+  async getLiquidState(): Promise<LiquidStoreState> {
+    return request<LiquidStoreState>('/api/liquid/state');
+  },
+
+  async createLiquidTransaction(payload: {
+    type: 'INWARD' | 'OUTWARD';
+    txDate: string;
+    tankId: number;
+    materialName: string;
+    quantityKg: number;
+    referenceNumber: string;
+    documentNumber?: string;
+    partyName: string;
+    vehicleNumber?: string;
+    driverName?: string;
+    remarks?: string;
+  }): Promise<{ state: LiquidStoreState; txCode: string }> {
+    return request<{ state: LiquidStoreState; txCode: string }>('/api/liquid/transactions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateLiquidTransaction(
+    id: number,
+    payload: {
+      type: 'INWARD' | 'OUTWARD';
+      txDate: string;
+      tankId: number;
+      materialName: string;
+      quantityKg: number;
+      referenceNumber: string;
+      documentNumber?: string;
+      partyName: string;
+      vehicleNumber?: string;
+      driverName?: string;
+      remarks?: string;
+    }
+  ): Promise<{ state: LiquidStoreState; txCode: string }> {
+    return request<{ state: LiquidStoreState; txCode: string }>(`/api/liquid/transactions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteLiquidTransaction(id: number): Promise<{ state: LiquidStoreState; txCode: string }> {
+    return request<{ state: LiquidStoreState; txCode: string }>(`/api/liquid/transactions/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async createLiquidTank(payload: {
+    name: string;
+    totalCapacityKg: number;
+    depthMeters: number;
+    location: string;
+    notes?: string;
+  }): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>('/api/liquid/tanks', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateLiquidTank(
+    id: number,
+    payload: {
+      name: string;
+      totalCapacityKg: number;
+      depthMeters: number;
+      location: string;
+      notes?: string;
+    }
+  ): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>(`/api/liquid/tanks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteLiquidTank(id: number): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>(`/api/liquid/tanks/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async createLiquidMaterial(payload: {
+    name: string;
+    code?: string;
+    description?: string;
+  }): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>('/api/liquid/materials', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateLiquidMaterial(
+    id: number,
+    payload: {
+      name: string;
+      code?: string;
+      description?: string;
+    }
+  ): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>(`/api/liquid/materials/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteLiquidMaterial(id: number): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>(`/api/liquid/materials/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updateLiquidSettings(payload: Partial<LiquidStoreSettings>): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>('/api/liquid/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async resetLiquidStore(): Promise<{ state: LiquidStoreState }> {
+    return request<{ state: LiquidStoreState }>('/api/liquid/reset', {
+      method: 'POST',
+    });
+  },
+
+  // Ex-Factory Dispatch Entries
+  async getExFactoryEntries(): Promise<ExFactoryEntry[]> {
+    const res = await request<{ entries: ExFactoryEntry[] }>('/api/ex-factory');
+    return res.entries;
+  },
+
+  async createExFactoryEntry(payload: {
+    entryDate?: string;
+    delNoteNumber: string;
+    customerName: string;
+    truckNumber: string;
+    driverName?: string;
+    mobileNumber?: string;
+    iqamaNumber?: string;
+  }): Promise<ExFactoryEntry> {
+    const res = await request<{ entry: ExFactoryEntry }>('/api/ex-factory', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.entry;
+  },
+
+  async updateExFactoryEntry(
+    id: string,
+    payload: {
+      entryDate?: string;
+      delNoteNumber: string;
+      customerName: string;
+      truckNumber: string;
+      driverName?: string;
+      mobileNumber?: string;
+      iqamaNumber?: string;
+    }
+  ): Promise<ExFactoryEntry> {
+    const res = await request<{ entry: ExFactoryEntry }>(`/api/ex-factory/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return res.entry;
+  },
+
+  async deleteExFactoryEntry(id: string): Promise<void> {
+    await request(`/api/ex-factory/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
   },
 };

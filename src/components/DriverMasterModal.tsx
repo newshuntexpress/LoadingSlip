@@ -3,7 +3,7 @@ import { DriverMasterRecord } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { Users, Truck, Plus, Trash2, Edit2, Search, Phone, Building2, MapPin, X, Save, Check } from 'lucide-react';
+import { Users, Plus, Trash2, Edit2, Search, X, Save } from 'lucide-react';
 
 interface DriverMasterModalProps {
   onClose: () => void;
@@ -13,7 +13,7 @@ interface DriverMasterModalProps {
 
 export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
   onClose,
-  onSelectForNewTicket,
+  onSelectForNewTicket: _onSelectForNewTicket,
   canManage = true,
 }) => {
   const [drivers, setDrivers] = useState<DriverMasterRecord[]>(() => StorageService.getDrivers());
@@ -183,7 +183,7 @@ export const DriverMasterModal: React.FC<DriverMasterModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[11px] font-semibold text-neutral-600">Mobile / WhatsApp *</label>
-                  <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                  <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
                     🇸🇦 +966
                   </span>
                 </div>

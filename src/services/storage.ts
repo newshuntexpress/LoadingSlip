@@ -1,22 +1,16 @@
 import { TicketRecord, DriverMasterRecord, CompanySettings, LoadingSlipItem } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 
-const STORAGE_KEYS = {
-  TICKETS: 'mat_loading_tickets_v1',
-  DRIVERS: 'mat_loading_drivers_v1',
-  SETTINGS: 'mat_loading_settings_v1',
-  DEFAULT_SETTINGS: 'mat_loading_default_settings_v1',
-};
-
 export const DEFAULT_SETTINGS: CompanySettings = {
-  companyName: 'SHREE BALAJI LOGISTICS & INDUSTRIAL PLANT',
+  companyName: 'ARABIAN WATERPROOFING CO. AWAZEL',
   companySubtitle: 'Material Dispatch, Gate Queue & Loading Slip Management System',
-  address: 'Plot No. 48-52, Industrial Area, Sector 5, Transport District',
-  phone: '+966 11 456 7890',
-  email: 'dispatch@balajilogistics.com',
-  gstin: '310123456700003',
-  gates: ['Gate 1', 'Gate 2', 'Gate 3', 'Gate 4'],
-  ticketPrefix: 'TK',
+  logoDataUrl: '',
+  address: 'New industrial city 2 Riyadh KSA 11461',
+  phone: '0550170374',
+  email: 'dispatch@shreebalajilogistics.com',
+  gstin: '',
+  gates: ['Gate 1', 'Gate 2', 'Gate 4', 'Gate 5', 'Gate 6'],
+  ticketPrefix: 'AWZR',
   autoPrintTokenAfterSave: true,
 };
 
@@ -37,16 +31,12 @@ export function getTodayDateString(): string {
   }
 }
 
-const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-
 export function formatDisplayDate(dateStr: string): string {
   if (!dateStr) return '';
   const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return dateStr;
   const [, year, month, day] = match;
-  const monthIdx = parseInt(month, 10) - 1;
-  const monthName = MONTH_NAMES[monthIdx] || month;
-  return `${day}-${monthName}-${year}`;
+  return `${day}/${month}/${year}`;
 }
 
 export function getCurrentTimeString(): string {
@@ -65,187 +55,6 @@ export function createEmpty8Rows(): LoadingSlipItem[] {
     looseRolls: '',
     remarks: '',
   }));
-}
-
-// Seed sample records if storage is empty
-const SAMPLE_DRIVERS: DriverMasterRecord[] = [
-  {
-    id: 'drv-1',
-    truckNumber: '5275 AXG',
-    driverName: 'Rameshwar Yadav',
-    driverPhone: '+966550000000',
-    iqamaNumber: '2481928491',
-    transporterName: 'Al-Majd Freight Lines',
-    defaultDestination: 'Central Warehouse Riyadh',
-    lastVisited: getTodayDateString(),
-    tripCount: 14,
-  },
-  {
-    id: 'drv-2',
-    truckNumber: '8912 TBD',
-    driverName: 'Kuldeep Singh',
-    driverPhone: '+966551234567',
-    iqamaNumber: '2398102948',
-    transporterName: 'Express Logistics Services',
-    defaultDestination: 'Jeddah Port Depot',
-    lastVisited: getTodayDateString(),
-    tripCount: 8,
-  },
-  {
-    id: 'drv-3',
-    truckNumber: '4410 KSA',
-    driverName: 'Sunil Kumar',
-    driverPhone: '+966569876543',
-    iqamaNumber: '2219481920',
-    transporterName: 'National Freight Carriers',
-    defaultDestination: 'Dammam Industrial Hub',
-    lastVisited: getTodayDateString(),
-    tripCount: 21,
-  },
-  {
-    id: 'drv-4',
-    truckNumber: '7821 RTA',
-    driverName: 'Mohd. Salim',
-    driverPhone: '+966508899112',
-    iqamaNumber: '2510293841',
-    transporterName: 'Super Fast Cargo',
-    defaultDestination: 'Yanbu Terminal',
-    lastVisited: getTodayDateString(),
-    tripCount: 5,
-  },
-];
-
-function generateSampleTickets(): TicketRecord[] {
-  const today = getTodayDateString();
-  const prefix = DEFAULT_SETTINGS.ticketPrefix;
-  const dateFormatted = today.replace(/-/g, '');
-
-  return [
-    {
-      id: 'tkt-1',
-      ticketNumber: `${prefix}-${dateFormatted}-001`,
-      sequenceNumber: 1,
-      date: today,
-      timeIn: '08:15 AM',
-      timeCalled: '08:45 AM',
-      timeLoadingStarted: '09:05 AM',
-      timeCompleted: '10:10 AM',
-      gateNumber: 'Gate 2',
-      gateSequenceNumber: 1,
-      truckNumber: '5275 AXG',
-      driverName: 'Rameshwar Yadav',
-      driverPhone: '+966550000000',
-      iqamaNumber: '2481928491',
-      transporterName: 'Al-Majd Freight Lines',
-      destinationPlace: 'Central Warehouse Riyadh',
-      status: 'completed',
-      priority: 'normal',
-      createdAt: Date.now() - 7200000,
-      updatedAt: Date.now() - 3600000,
-      delNoteNumber: 'A1DD00001',
-      loadingSlip: {
-        delNoteNumber: 'A1DD00001',
-        placeName: 'Central Warehouse Riyadh',
-        preparedBy: '',
-        checkedBy: '',
-        driverSignatureNotes: 'Received material in sound condition',
-        totalQty: 480,
-        totalPallets: 18,
-        totalLooseRolls: 45,
-        createdAt: today,
-        items: [
-          { srNo: 1, description: 'Industrial Kraft Paper Rolls 120 GSM', pack: 'Rolls', qty: '120', pallets: '4', looseRolls: '12', remarks: 'Batch A-1' },
-          { srNo: 2, description: 'Corrugated Fluting Rolls 140 GSM', pack: 'Rolls', qty: '100', pallets: '4', looseRolls: '10', remarks: 'Grade I' },
-          { srNo: 3, description: 'Duplex Board Packaging Sheets', pack: 'Board', qty: '80', pallets: '3', looseRolls: '0', remarks: 'Moisture proof' },
-          { srNo: 4, description: 'Stretch Wrap Film Bundles', pack: 'EA', qty: '60', pallets: '2', looseRolls: '15', remarks: 'Clear 23 Mic' },
-          { srNo: 5, description: 'Polypropylene Strapping Rolls', pack: 'Rolls', qty: '50', pallets: '2', looseRolls: '8', remarks: '12mm Blue' },
-          { srNo: 6, description: 'Industrial Adhesive Gum Drums', pack: 'Drum', qty: '40', pallets: '2', looseRolls: '0', remarks: '50 Kg drums' },
-          { srNo: 7, description: 'Coating Solvent Cans', pack: 'Can', qty: '30', pallets: '1', looseRolls: '0', remarks: '20L Can' },
-          { srNo: 8, description: '', pack: '', qty: '', pallets: '', looseRolls: '', remarks: '' },
-        ],
-      },
-    },
-    {
-      id: 'tkt-2',
-      ticketNumber: `${prefix}-${dateFormatted}-002`,
-      sequenceNumber: 2,
-      date: today,
-      timeIn: '09:20 AM',
-      timeCalled: '09:40 AM',
-      timeLoadingStarted: '10:00 AM',
-      gateNumber: 'Gate 2',
-      gateSequenceNumber: 1,
-      truckNumber: '4410 KSA',
-      driverName: 'Sunil Kumar',
-      driverPhone: '+966569876543',
-      iqamaNumber: '2219481920',
-      transporterName: 'National Freight Carriers',
-      destinationPlace: 'Dammam Industrial Hub',
-      status: 'under_loading',
-      priority: 'urgent',
-      createdAt: Date.now() - 3600000,
-      updatedAt: Date.now() - 1800000,
-      loadingSlip: {
-        delNoteNumber: 'DN-2026/0892',
-        placeName: 'Dammam Industrial Hub',
-        preparedBy: 'Dinesh Sharma (Dispatcher)',
-        checkedBy: '',
-        totalQty: 350,
-        totalPallets: 14,
-        totalLooseRolls: 24,
-        createdAt: today,
-        items: [
-          { srNo: 1, description: 'Virgin Kraft Liner Paper 180 GSM', pack: 'Rolls', qty: '140', pallets: '6', looseRolls: '14', remarks: 'Priority Order' },
-          { srNo: 2, description: 'Heavy Duty Box Rolls', pack: 'Rolls', qty: '110', pallets: '5', looseRolls: '10', remarks: 'High BF' },
-          { srNo: 3, description: 'Adhesive Gum Drums 50Kg', pack: 'Drum', qty: '60', pallets: '2', looseRolls: '0', remarks: 'D-50 Grade' },
-          { srNo: 4, description: 'Industrial Chemical Raw material', pack: 'KG', qty: '40', pallets: '1', looseRolls: '0', remarks: 'Sealed bags' },
-          { srNo: 5, description: '', pack: '', qty: '', pallets: '', looseRolls: '', remarks: '' },
-          { srNo: 6, description: '', pack: '', qty: '', pallets: '', looseRolls: '', remarks: '' },
-          { srNo: 7, description: '', pack: '', qty: '', pallets: '', looseRolls: '', remarks: '' },
-          { srNo: 8, description: '', pack: '', qty: '', pallets: '', looseRolls: '', remarks: '' },
-        ],
-      },
-    },
-    {
-      id: 'tkt-3',
-      ticketNumber: `${prefix}-${dateFormatted}-003`,
-      sequenceNumber: 3,
-      date: today,
-      timeIn: '09:50 AM',
-      timeCalled: '10:15 AM',
-      gateNumber: 'Gate 1',
-      gateSequenceNumber: 1,
-      truckNumber: '8912 TBD',
-      driverName: 'Kuldeep Singh',
-      driverPhone: '+966551234567',
-      iqamaNumber: '2398102948',
-      transporterName: 'Express Logistics Services',
-      destinationPlace: 'Jeddah Port Depot',
-      status: 'called',
-      priority: 'normal',
-      createdAt: Date.now() - 2400000,
-      updatedAt: Date.now() - 600000,
-    },
-    {
-      id: 'tkt-4',
-      ticketNumber: `${prefix}-${dateFormatted}-004`,
-      sequenceNumber: 4,
-      date: today,
-      timeIn: '10:10 AM',
-      gateNumber: 'Gate 2',
-      gateSequenceNumber: 2,
-      truckNumber: '7821 RTA',
-      driverName: 'Mohd. Salim',
-      driverPhone: '+966508899112',
-      iqamaNumber: '2510293841',
-      transporterName: 'Super Fast Cargo',
-      destinationPlace: 'Yanbu Terminal',
-      status: 'waiting',
-      priority: 'normal',
-      createdAt: Date.now() - 1200000,
-      updatedAt: Date.now() - 1200000,
-    },
-  ];
 }
 
 // In-memory cache synchronized with authenticated backend API (wiped on logout)
@@ -346,11 +155,11 @@ export const StorageService = {
     if (existingIndex >= 0) {
       drivers[existingIndex] = {
         ...drivers[existingIndex],
-        driverName: driverName.trim() || drivers[existingIndex].driverName,
+        driverName: driverName.trim().toUpperCase() || drivers[existingIndex].driverName,
         driverPhone: cleanPhone || drivers[existingIndex].driverPhone,
-        iqamaNumber: iqamaNumber?.trim() || drivers[existingIndex].iqamaNumber,
-        transporterName: transporterName.trim() || drivers[existingIndex].transporterName,
-        defaultDestination: destination?.trim() || drivers[existingIndex].defaultDestination,
+        iqamaNumber: iqamaNumber?.trim().toUpperCase() || drivers[existingIndex].iqamaNumber,
+        transporterName: transporterName.trim().toUpperCase() || drivers[existingIndex].transporterName,
+        defaultDestination: destination?.trim().toUpperCase() || drivers[existingIndex].defaultDestination,
         lastVisited: getTodayDateString(),
         tripCount: (drivers[existingIndex].tripCount || 1) + 1,
       };
@@ -358,11 +167,11 @@ export const StorageService = {
       drivers.unshift({
         id: 'drv-' + Date.now(),
         truckNumber: cleanTruck,
-        driverName: driverName.trim(),
+        driverName: driverName.trim().toUpperCase(),
         driverPhone: cleanPhone,
-        iqamaNumber: iqamaNumber?.trim(),
-        transporterName: transporterName.trim(),
-        defaultDestination: destination?.trim(),
+        iqamaNumber: iqamaNumber?.trim().toUpperCase(),
+        transporterName: transporterName.trim().toUpperCase(),
+        defaultDestination: destination?.trim().toUpperCase(),
         lastVisited: getTodayDateString(),
         tripCount: 1,
       });
@@ -395,7 +204,10 @@ export const StorageService = {
     myPositionAtGate: number;
     aheadCount: number;
   } {
-    const tickets = this.getTickets().filter((t) => t.date === date && t.gateNumber === gateNumber);
+    const normGate = gateNumber.trim().toUpperCase();
+    const tickets = this.getTickets().filter(
+      (t) => t.date === date && (t.gateNumber || '').trim().toUpperCase() === normGate
+    );
     const currentLoading = tickets.find((t) => t.status === 'under_loading');
     const calledTruck = tickets.find((t) => t.status === 'called');
     const waitingQueue = tickets
@@ -554,11 +366,16 @@ export const StorageService = {
       'Remarks',
     ];
 
+    const formatStatus = (s: string) =>
+      String(s || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
     const rows = tickets.map((t) => [
       t.ticketNumber,
       t.sequenceNumber,
       t.date,
-      t.timeIn || '',
+      t.timeIn,
       t.timeCalled || '',
       t.timeLoadingStarted || '',
       t.timeCompleted || '',
@@ -570,7 +387,7 @@ export const StorageService = {
       `"${t.iqamaNumber || ''}"`,
       `"${t.transporterName || ''}"`,
       `"${t.destinationPlace || ''}"`,
-      t.status.toUpperCase(),
+      formatStatus(t.status),
       t.loadingSlip?.delNoteNumber || '',
       `"${t.loadingSlip?.loadedBy || t.loadingSlip?.checkedBy || ''}"`,
       t.loadingSlip?.totalQty || '',
@@ -579,13 +396,15 @@ export const StorageService = {
       `"${t.remarks || ''}"`,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvBody = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvBody], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Loading_Tickets_${dateStr || getTodayDateString()}.csv`);
+    link.href = url;
+    link.download = `Loading_Tickets_${dateStr || getTodayDateString()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   },
 };

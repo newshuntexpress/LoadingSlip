@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TicketRecord, CompanySettings } from '../types';
 import { WHATSAPP_TEMPLATES, openWhatsAppChat, cleanPhoneNumber, formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { MessageSquare, Send, Check, Phone, Copy, X, Sparkles, ExternalLink } from 'lucide-react';
+import { MessageSquare, Send, Check, Phone, Copy, X, ExternalLink } from 'lucide-react';
 
 interface WhatsAppModalProps {
   ticket: TicketRecord;
@@ -26,8 +26,10 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   });
   const [copied, setCopied] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handlePhoneChange = (val: string) => {
+    setErrorMsg(null);
     setPhoneNumber(val);
     const digits = val.replace(/\D/g, '');
     if (digits.startsWith('05') && digits.length === 10) {
@@ -53,9 +55,10 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
 
   const handleSend = () => {
     if (!phoneNumber.trim()) {
-      alert('Please enter Driver Mobile Number!');
+      setErrorMsg('Please enter Driver Mobile Number.');
       return;
     }
+    setErrorMsg(null);
 
     const formatted = formatSaudiPhoneNumber(phoneNumber);
 
@@ -105,6 +108,12 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
         </div>
 
         <div className="p-5 space-y-4">
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3.5 py-2 rounded-xl text-xs font-semibold">
+              {errorMsg}
+            </div>
+          )}
+
           {/* Recipient Details & Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-neutral-50 p-3 rounded-xl border border-neutral-200">
             <div>
@@ -119,7 +128,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
                 <label className="text-[11px] font-semibold text-neutral-500 uppercase">
                   WhatsApp Mobile Number
                 </label>
-                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded">
+                <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded">
                   🇸🇦 +966
                 </span>
               </div>

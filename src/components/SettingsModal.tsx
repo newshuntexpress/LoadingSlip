@@ -1,8 +1,24 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiClient } from '../services/api';
-import { Settings, Plus, Trash2, Save, X, DoorOpen, RotateCcw, BookmarkCheck, CheckCircle2, AlertCircle } from 'lucide-react';
+import { processLogoFile } from '../utils/logo';
+import {
+  Settings,
+  Plus,
+  Trash2,
+  Save,
+  X,
+  DoorOpen,
+  RotateCcw,
+  BookmarkCheck,
+  CheckCircle2,
+  AlertCircle,
+  Upload,
+  Image as ImageIcon,
+  Building2,
+  Loader2,
+} from 'lucide-react';
 
 interface SettingsModalProps {
   settings: CompanySettings;
@@ -17,6 +33,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [companyName, setCompanyName] = useState(settings.companyName);
   const [companySubtitle, setCompanySubtitle] = useState(settings.companySubtitle);
+  const [logoDataUrl, setLogoDataUrl] = useState<string>(settings.logoDataUrl || '');
+  const [logoProcessing, setLogoProcessing] = useState<boolean>(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
   const [email, setEmail] = useState(settings.email);
@@ -53,6 +72,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setGates(gates.filter((g) => g !== gate));
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoProcessing(true);
+    try {
+      const normalizedPng = await processLogoFile(file);
+      setLogoDataUrl(normalizedPng);
+      showFeedback('success', 'Logo uploaded! Click "Save Settings" or "Save as Default" to apply across the system.');
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Unable to process selected logo image.');
+    } finally {
+      setLogoProcessing(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoDataUrl('');
+    showFeedback('success', 'Logo removed. Click "Save Settings" to apply.');
+  };
+
   const buildCurrentSettings = (): CompanySettings => {
     const finalGates = [...gates];
     const pendingGate = newGateName.trim();
@@ -62,6 +102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return {
       companyName: companyName.trim() || 'Factory / Plant Name',
       companySubtitle: companySubtitle.trim(),
+      logoDataUrl: logoDataUrl || '',
       address: address.trim(),
       phone: phone.trim(),
       email: email.trim(),
@@ -91,6 +132,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const def = StorageService.getDefaultSettings();
     setCompanyName(def.companyName);
     setCompanySubtitle(def.companySubtitle);
+    setLogoDataUrl(def.logoDataUrl || '');
     setAddress(def.address);
     setPhone(def.phone);
     setEmail(def.email);
@@ -141,6 +183,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Company Logo Upload & Live Preview */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-blue-700" />
+                <span className="text-xs font-bold text-neutral-800 tracking-wide">
+                  Company Logo (Shown Everywhere)
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-neutral-500">
+                PNG, JPG, WebP or SVG
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* Live Header Preview Box */}
+              <div className="flex items-center gap-3 bg-[#354A5F] text-white px-3 py-2.5 rounded-xl border border-[#223242] flex-1 min-w-0">
+                <div className="w-11 h-11 rounded-lg bg-white flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-[#F0AB00]/70 p-1">
+                  {logoDataUrl ? (
+                    <img
+                      src={logoDataUrl}
+                      alt="Company Logo Preview"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="w-full h-full rounded bg-gradient-to-br from-[#0A6ED1] to-[#004A99] flex items-center justify-center text-[#F0AB00]">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black tracking-wide truncate text-white">
+                    {companyName || 'Company / Plant Name'}
+                  </p>
+                  <p className="text-[10px] text-[#CBD8E6] truncate">
+                    {companySubtitle || 'App Header, Login, Slips & All PDFs'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Upload / Remove Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={logoProcessing}
+                  onClick={() => logoInputRef.current?.click()}
+                  className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white shadow-xs"
+                >
+                  {logoProcessing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span>{logoDataUrl ? 'Change Logo' : 'Upload Logo'}</span>
+                </button>
+
+                {logoDataUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="app-btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                    title="Remove uploaded logo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="text-xs font-bold text-neutral-700 block mb-1">
               Company / Plant Name *

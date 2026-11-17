@@ -95,6 +95,7 @@ export interface DriverMasterRecord {
 export interface CompanySettings {
   companyName: string;
   companySubtitle: string;
+  logoDataUrl?: string;
   address: string;
   phone: string;
   email: string;
@@ -105,7 +106,18 @@ export interface CompanySettings {
   sessionIdleMinutes?: number;
 }
 
-export type UserRoleName = 'admin' | 'user' | 'forklift_operator';
+export interface PublicBranding {
+  companyName?: string;
+  companySubtitle?: string;
+  logoDataUrl?: string;
+}
+
+export type UserRoleName =
+  | 'admin'
+  | 'user'
+  | 'forklift_operator'
+  | 'liquid_store_operator'
+  | 'ex_factory_operator';
 
 export interface AuthUser {
   id: string;
@@ -164,3 +176,98 @@ export interface ActiveSessionInfo {
   expiresAt: number;
 }
 
+export interface LiquidTankMaterialBalance {
+  materialName: string;
+  inwardKg: number;
+  outwardKg: number;
+  balanceKg: number;
+  balanceMt: number;
+}
+
+export interface LiquidTankComputed {
+  id: number;
+  name: string;
+  totalCapacityKg: number;
+  totalCapacityMt: number;
+  depthMeters: number;
+  location: string;
+  notes: string;
+  totalInwardKg: number;
+  totalOutwardKg: number;
+  currentStockKg: number;
+  currentStockMt: number;
+  emptyCapacityKg: number;
+  emptyCapacityMt: number;
+  filledPercentage: number;
+  emptyPercentage: number;
+  filledMeters: number;
+  emptyMeters: number;
+  lastTransactionAt: string | null;
+  materials: LiquidTankMaterialBalance[];
+  productLabel: string;
+  createdAt?: number;
+}
+
+export interface LiquidMaterial {
+  id: number;
+  name: string;
+  code: string;
+  description: string;
+  createdAt?: number;
+}
+
+export interface LiquidTransaction {
+  id: number;
+  txCode: string;
+  type: 'INWARD' | 'OUTWARD';
+  txDate: string;
+  tankId: number;
+  materialName: string;
+  quantityKg: number;
+  quantityMt: number;
+  referenceNumber: string;
+  documentNumber?: string;
+  partyName: string;
+  vehicleNumber: string;
+  driverName?: string;
+  remarks: string;
+  createdBy?: string;
+  createdAt?: number;
+}
+
+export interface LiquidAuditLog {
+  id: number;
+  action: string;
+  entityType: string;
+  summary: string;
+  performedBy: string;
+  createdAt: number;
+}
+
+export interface LiquidStoreSettings {
+  facilityName: string;
+  theme: 'light' | 'dark';
+}
+
+export interface LiquidStoreState {
+  tanks: LiquidTankComputed[];
+  materials: LiquidMaterial[];
+  transactions: LiquidTransaction[];
+  auditLogs: LiquidAuditLog[];
+  settings: LiquidStoreSettings;
+}
+
+export interface ExFactoryEntry {
+  id: string;
+  entryDate: string; // YYYY-MM-DD (automatic current date)
+  delNoteNumber: string;
+  customerName: string;
+  truckNumber: string;
+  driverName: string;
+  mobileNumber: string;
+  iqamaNumber: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}

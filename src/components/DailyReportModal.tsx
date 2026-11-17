@@ -3,7 +3,7 @@ import { TicketRecord, CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { FileSpreadsheet, Printer, Download, Upload, X, CheckCircle2, Clock, Calendar, BarChart3 } from 'lucide-react';
+import { FileSpreadsheet, Printer, Download, Upload, X } from 'lucide-react';
 
 interface DailyReportModalProps {
   tickets: TicketRecord[];
@@ -27,7 +27,6 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
 
   const completed = dayTickets.filter((t) => t.status === 'completed');
   const underLoading = dayTickets.filter((t) => t.status === 'under_loading');
-  const called = dayTickets.filter((t) => t.status === 'called');
   const waiting = dayTickets.filter((t) => t.status === 'waiting');
 
   const totalQty = dayTickets.reduce((acc, t) => acc + (t.loadingSlip?.totalQty || 0), 0);
@@ -105,9 +104,20 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
         <div className="daily-report-printable p-4 sm:p-6 space-y-5 max-h-[85vh] overflow-y-auto print:max-h-none print:overflow-visible print:p-2">
           {/* Company Title on Print */}
           <div className="text-center pb-2 border-b-2 border-black">
-            <h1 className="text-lg font-black uppercase text-neutral-900">{settings.companyName}</h1>
-            <p className="text-xs text-neutral-600">{settings.address} | Ph: {settings.phone}</p>
-            <div className="mt-1 inline-block bg-neutral-900 text-white text-xs font-bold px-3 py-0.5 rounded">
+            <div className="flex items-center justify-center gap-3">
+              {settings.logoDataUrl && (
+                <img
+                  src={settings.logoDataUrl}
+                  alt={settings.companyName}
+                  className="h-11 w-11 object-contain rounded border border-neutral-200 p-0.5 bg-white shrink-0"
+                />
+              )}
+              <div>
+                <h1 className="text-lg font-black uppercase text-neutral-900">{settings.companyName}</h1>
+                <p className="text-xs text-neutral-600">{settings.address} | Ph: {settings.phone}</p>
+              </div>
+            </div>
+            <div className="mt-1.5 inline-block bg-neutral-900 text-white text-xs font-bold px-3 py-0.5 rounded">
               DAILY MATERIAL LOADING & DISPATCH REPORT: {date}
             </div>
           </div>
@@ -223,7 +233,9 @@ export const DailyReportModal: React.FC<DailyReportModalProps> = ({
                       )}
                     </td>
                     <td className="py-1.5 px-2 text-center font-bold">
-                      {t.status.toUpperCase()}
+                      {String(t.status || '')
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, (c) => c.toUpperCase())}
                     </td>
                     <td className="py-1.5 px-2 text-[10px]">
                       {t.timeIn} {t.timeCompleted ? `-> ${t.timeCompleted}` : ''}

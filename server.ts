@@ -15,9 +15,10 @@ import {
   cleanExpiredSessions,
   computeEffectivePermissions,
   FORKLIFT_ALLOWED_PERMISSION_KEYS,
+  LIQUID_STORE_ALLOWED_PERMISSION_KEYS,
+  EX_FACTORY_ALLOWED_PERMISSION_KEYS,
 } from './server/db.ts';
 import {
-  SESSION_COOKIE_NAME,
   DUMMY_BCRYPT_HASH,
   getClientIp,
   hashSessionToken,
@@ -37,6 +38,14 @@ import {
   requirePermission,
   requireAnyPermission,
 } from './server/security.ts';
+import { liquidRouter } from './server/liquid.ts';
+import { exFactoryRouter } from './server/exFactory.ts';
+import {
+  upperStr,
+  normalizeTicketRecord,
+  normalizeDriverRecord,
+  normalizeSettingsRecord,
+} from './server/normalize.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -72,18 +81,55 @@ setInterval(() => {
 // 1. AUTHENTICATION ENDPOINTS
 // ==========================================
 
+function getPublicBranding(): { companyName?: string; companySubtitle?: string; logoDataUrl?: string } | undefined {
+  try {
+    const row = (db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() ||
+      db.prepare(`SELECT value_json FROM app_settings WHERE key = 'default'`).get()) as
+      | { value_json: string }
+      | undefined;
+    if (!row) return undefined;
+    const parsed = JSON.parse(row.value_json);
+    return {
+      companyName: typeof parsed.companyName === 'string' ? parsed.companyName.trim() : undefined,
+      companySubtitle: typeof parsed.companySubtitle === 'string' ? parsed.companySubtitle.trim() : undefined,
+      logoDataUrl: typeof parsed.logoDataUrl === 'string' ? parsed.logoDataUrl : '',
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function validateLogoDataUrl(val: unknown): { ok: true; value: string } | { ok: false; error: string } {
+  if (val === undefined || val === null || val === '') {
+    return { ok: true, value: '' };
+  }
+  if (typeof val !== 'string') {
+    return { ok: false, error: 'Invalid logo image format.' };
+  }
+  const trimmed = val.trim();
+  if (!trimmed) return { ok: true, value: '' };
+  if (trimmed.length > 2_000_000) {
+    return { ok: false, error: 'Logo image payload exceeds maximum allowed size.' };
+  }
+  if (!/^data:image\/(png|jpeg|jpg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
+    return { ok: false, error: 'Logo must be a valid base64 PNG, JPG, WebP, GIF, or SVG image.' };
+  }
+  return { ok: true, value: trimmed };
+}
+
 app.get('/api/auth/status', (req: Request, res: Response) => {
+  const branding = getPublicBranding();
   const userCountRow = db.prepare(`SELECT COUNT(*) as cnt FROM users`).get() as { cnt: number };
   const needsSetup = userCountRow.cnt === 0;
 
   if (needsSetup) {
-    res.json({ authenticated: false, needsSetup: true });
+    res.json({ authenticated: false, needsSetup: true, branding });
     return;
   }
 
   const rawToken = extractSessionToken(req);
   if (!rawToken) {
-    res.json({ authenticated: false, needsSetup: false });
+    res.json({ authenticated: false, needsSetup: false, branding });
     return;
   }
 
@@ -107,14 +153,14 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
   const now = Date.now();
   if (!session || session.revoked_at !== null || now > session.expires_at || now - session.created_at > 12 * 3600 * 1000) {
     clearSessionCookie(req, res);
-    res.json({ authenticated: false, needsSetup: false });
+    res.json({ authenticated: false, needsSetup: false, branding });
     return;
   }
 
   const user = getSafeUserById(session.user_id);
   if (!user || !user.isActive) {
     clearSessionCookie(req, res);
-    res.json({ authenticated: false, needsSetup: false });
+    res.json({ authenticated: false, needsSetup: false, branding });
     return;
   }
 
@@ -123,6 +169,7 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
     needsSetup: false,
     user,
     csrfToken: session.csrf_token,
+    branding,
   });
 });
 
@@ -156,8 +203,8 @@ app.post('/api/auth/setup', (req: Request, res: Response) => {
     return;
   }
 
-  const cleanUsername = String(username).trim();
-  const cleanFullName = String(fullName).trim();
+  const cleanUsername = String(username || '').trim();
+  const cleanFullName = String(fullName || '').trim();
   const cleanEmail = String(email || '').trim();
   const passwordHash = bcrypt.hashSync(String(password), 12);
   const userId = `usr_${crypto.randomUUID()}`;
@@ -455,7 +502,7 @@ app.get('/api/admin/users', requireAuth, requirePasswordChanged, requireAdmin, (
     id: row.id,
     username: row.username,
     fullName: row.full_name,
-    email: row.email || '',
+    email: row.email,
     roleId: row.role_id,
     roleName: row.role_name,
     roleDisplayName: row.role_display_name,
@@ -490,7 +537,7 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
     return;
   }
 
-  const cleanUsername = String(username).trim();
+  const cleanUsername = String(username || '').trim();
   const existing = db.prepare(`SELECT id FROM users WHERE username = ? COLLATE NOCASE`).get(cleanUsername);
   if (existing) {
     res.status(409).json({ error: 'Username already exists. Please choose another username.' });
@@ -498,7 +545,15 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
   }
 
   const targetRoleName =
-    roleName === 'admin' ? 'admin' : roleName === 'forklift_operator' ? 'forklift_operator' : 'user';
+    roleName === 'admin'
+      ? 'admin'
+      : roleName === 'forklift_operator'
+      ? 'forklift_operator'
+      : roleName === 'liquid_store_operator'
+      ? 'liquid_store_operator'
+      : roleName === 'ex_factory_operator'
+      ? 'ex_factory_operator'
+      : 'user';
   const roleRow = db.prepare(`SELECT id FROM roles WHERE name = ?`).get(targetRoleName) as { id: string } | undefined;
   if (!roleRow) {
     res.status(400).json({ error: 'Invalid role selected.' });
@@ -517,7 +572,7 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
     ).run(
       userId,
       cleanUsername,
-      String(fullName).trim(),
+      String(fullName || '').trim(),
       String(email || '').trim(),
       passwordHash,
       roleRow.id,
@@ -540,11 +595,22 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
         'slips.print',
         'drivers.manage',
         'reports.view',
+        'liquid.store',
+        'ex_factory.view',
+        'ex_factory.create',
+        'ex_factory.update',
+        'ex_factory.delete',
       ]);
-      for (const permKey of permissions) {
-        if (typeof permKey === 'string' && validUserPerms.has(permKey)) {
-          insertPerm.run(userId, permKey);
-        }
+      const cleanPerms = permissions.filter(
+        (permKey): permKey is string => typeof permKey === 'string' && validUserPerms.has(permKey)
+      );
+      for (const permKey of cleanPerms) {
+        insertPerm.run(userId, permKey);
+      }
+      if (cleanPerms.length === 0) {
+        db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
+          userId
+        );
       }
     } else if (targetRoleName === 'forklift_operator' && Array.isArray(permissions)) {
       const insertPerm = db.prepare(
@@ -558,6 +624,38 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
         insertPerm.run(userId, permKey);
       }
       if (cleanForkliftPerms.length === 0) {
+        db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
+          userId
+        );
+      }
+    } else if (targetRoleName === 'liquid_store_operator' && Array.isArray(permissions)) {
+      const insertPerm = db.prepare(
+        `INSERT OR REPLACE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
+      );
+      const validLiquidPerms = new Set(LIQUID_STORE_ALLOWED_PERMISSION_KEYS);
+      const cleanLiquidPerms = permissions.filter(
+        (permKey): permKey is string => typeof permKey === 'string' && validLiquidPerms.has(permKey)
+      );
+      for (const permKey of cleanLiquidPerms) {
+        insertPerm.run(userId, permKey);
+      }
+      if (cleanLiquidPerms.length === 0) {
+        db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
+          userId
+        );
+      }
+    } else if (targetRoleName === 'ex_factory_operator' && Array.isArray(permissions)) {
+      const insertPerm = db.prepare(
+        `INSERT OR REPLACE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
+      );
+      const validExFactoryPerms = new Set(EX_FACTORY_ALLOWED_PERMISSION_KEYS);
+      const cleanExFactoryPerms = permissions.filter(
+        (permKey): permKey is string => typeof permKey === 'string' && validExFactoryPerms.has(permKey)
+      );
+      for (const permKey of cleanExFactoryPerms) {
+        insertPerm.run(userId, permKey);
+      }
+      if (cleanExFactoryPerms.length === 0) {
         db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
           userId
         );
@@ -604,10 +702,17 @@ app.patch('/api/admin/users/:id', requireAuth, requirePasswordChanged, requireCs
   }
 
   const nextRoleName =
-    roleName === 'admin' || roleName === 'user' || roleName === 'forklift_operator' ? roleName : target.roleName;
+    roleName === 'admin' ||
+    roleName === 'user' ||
+    roleName === 'forklift_operator' ||
+    roleName === 'liquid_store_operator' ||
+    roleName === 'ex_factory_operator'
+      ? roleName
+      : target.roleName;
   const roleRow = db.prepare(`SELECT id FROM roles WHERE name = ?`).get(nextRoleName) as { id: string };
   const nextActive = typeof isActive === 'boolean' ? (isActive ? 1 : 0) : target.isActive ? 1 : 0;
-  const nextFullName = typeof fullName === 'string' && fullName.trim().length >= 2 ? fullName.trim() : target.fullName;
+  const nextFullName =
+    typeof fullName === 'string' && fullName.trim().length >= 2 ? fullName.trim() : target.fullName;
   const nextEmail = typeof email === 'string' ? email.trim() : target.email;
 
   // Ensure at least 1 active Admin always remains
@@ -691,6 +796,10 @@ app.put(
     const validAllowedPerms =
       target.roleName === 'forklift_operator'
         ? new Set(FORKLIFT_ALLOWED_PERMISSION_KEYS)
+        : target.roleName === 'liquid_store_operator'
+        ? new Set(LIQUID_STORE_ALLOWED_PERMISSION_KEYS)
+        : target.roleName === 'ex_factory_operator'
+        ? new Set(EX_FACTORY_ALLOWED_PERMISSION_KEYS)
         : new Set([
             'tickets.view',
             'tickets.create',
@@ -700,6 +809,11 @@ app.put(
             'slips.print',
             'drivers.manage',
             'reports.view',
+            'liquid.store',
+            'ex_factory.view',
+            'ex_factory.create',
+            'ex_factory.update',
+            'ex_factory.delete',
           ]);
 
     const cleanPerms = permissions.filter((p): p is string => typeof p === 'string' && validAllowedPerms.has(p));
@@ -922,7 +1036,7 @@ function upsertDriverMasterInternal(ticketData: {
   iqamaNumber?: string;
   date?: string;
 }) {
-  const cleanTruck = String(ticketData.truckNumber || '').trim().toUpperCase();
+  const cleanTruck = upperStr(ticketData.truckNumber);
   if (!cleanTruck) return;
   const now = Date.now();
   const existing = db
@@ -930,18 +1044,18 @@ function upsertDriverMasterInternal(ticketData: {
     .get(cleanTruck) as { id: string; data_json: string } | undefined;
 
   if (existing) {
-    const prev = JSON.parse(existing.data_json);
-    const updated = {
+    const prev = normalizeDriverRecord(JSON.parse(existing.data_json));
+    const updated = normalizeDriverRecord({
       ...prev,
       truckNumber: cleanTruck,
-      driverName: String(ticketData.driverName || '').trim() || prev.driverName,
-      driverPhone: String(ticketData.driverPhone || '').trim() || prev.driverPhone,
-      iqamaNumber: String(ticketData.iqamaNumber || '').trim() || prev.iqamaNumber,
-      transporterName: String(ticketData.transporterName || '').trim() || prev.transporterName,
-      defaultDestination: String(ticketData.destinationPlace || '').trim() || prev.defaultDestination,
+      driverName: upperStr(ticketData.driverName) || prev.driverName,
+      driverPhone: upperStr(ticketData.driverPhone) || prev.driverPhone,
+      iqamaNumber: upperStr(ticketData.iqamaNumber) || prev.iqamaNumber,
+      transporterName: upperStr(ticketData.transporterName) || prev.transporterName,
+      defaultDestination: upperStr(ticketData.destinationPlace) || prev.defaultDestination,
       lastVisited: ticketData.date || prev.lastVisited,
       tripCount: (prev.tripCount || 1) + 1,
-    };
+    });
     db.prepare(`UPDATE drivers SET data_json = ?, updated_at = ? WHERE id = ?`).run(
       JSON.stringify(updated),
       now,
@@ -949,17 +1063,17 @@ function upsertDriverMasterInternal(ticketData: {
     );
   } else {
     const id = `drv-${now}-${crypto.randomBytes(3).toString('hex')}`;
-    const created = {
+    const created = normalizeDriverRecord({
       id,
       truckNumber: cleanTruck,
-      driverName: String(ticketData.driverName || '').trim(),
-      driverPhone: String(ticketData.driverPhone || '').trim(),
-      iqamaNumber: String(ticketData.iqamaNumber || '').trim(),
-      transporterName: String(ticketData.transporterName || '').trim(),
-      defaultDestination: String(ticketData.destinationPlace || '').trim(),
+      driverName: upperStr(ticketData.driverName),
+      driverPhone: upperStr(ticketData.driverPhone),
+      iqamaNumber: upperStr(ticketData.iqamaNumber),
+      transporterName: upperStr(ticketData.transporterName),
+      defaultDestination: upperStr(ticketData.destinationPlace),
       lastVisited: ticketData.date || new Date().toISOString().split('T')[0],
       tripCount: 1,
-    };
+    });
     db.prepare(`INSERT INTO drivers (id, truck_number, data_json, updated_at) VALUES (?, ?, ?, ?)`).run(
       id,
       cleanTruck,
@@ -1013,7 +1127,7 @@ function formatPlantTime(timestampMs: number): string {
   }
 }
 
-const PLANT_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const PLANT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function formatPlantDateTime(timestampMs: number): string {
   try {
@@ -1136,12 +1250,14 @@ app.get(
       .prepare(`SELECT data_json, version, created_by, updated_by FROM tickets ORDER BY date DESC, sequence_number ASC`)
       .all() as Array<{ data_json: string; version: number; created_by: string | null; updated_by: string | null }>;
 
-    const tickets = rows.map((r) => ({
-      ...JSON.parse(r.data_json),
-      version: r.version,
-      createdBy: r.created_by || undefined,
-      updatedBy: r.updated_by || undefined,
-    }));
+    const tickets = rows.map((r) =>
+      normalizeTicketRecord({
+        ...JSON.parse(r.data_json),
+        version: r.version,
+        createdBy: r.created_by || undefined,
+        updatedBy: r.updated_by || undefined,
+      })
+    );
 
     res.json({ tickets });
   }
@@ -1180,14 +1296,15 @@ app.post(
       const settingsRow = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
         | { value_json: string }
         | undefined;
-      const prefix = settingsRow ? JSON.parse(settingsRow.value_json).ticketPrefix || 'TK' : 'TK';
+      const prefix = settingsRow ? upperStr(JSON.parse(settingsRow.value_json).ticketPrefix) || 'TK' : 'TK';
       const ticketNumber = `${prefix}-${dateStr.replace(/-/g, '')}-${String(nextSeq).padStart(3, '0')}`;
 
-      const gateNumber = String(payload.gateNumber || 'Gate 1');
+      const gateNumber = String(payload.gateNumber || 'Gate 1').trim();
+      const normGate = upperStr(gateNumber);
       const activeAtGate = dayRows.filter((r) => {
         const parsed = JSON.parse(r.data_json);
         return (
-          parsed.gateNumber === gateNumber &&
+          upperStr(parsed.gateNumber) === normGate &&
           (parsed.status === 'under_loading' || parsed.status === 'called' || parsed.status === 'waiting')
         );
       });
@@ -1197,11 +1314,12 @@ app.post(
       const autoLoadingMinutes = getConfiguredAutoLoadingMinutes();
       const autoUnderLoadingAt = now + autoLoadingMinutes * 60 * 1000;
       const id = `tkt-${now}-${crypto.randomBytes(3).toString('hex')}`;
-      const record = {
+      const record = normalizeTicketRecord({
         ...payload,
         id,
         ticketNumber,
         sequenceNumber: nextSeq,
+        gateNumber,
         gateSequenceNumber: gateSeq,
         date: dateStr,
         status: 'waiting',
@@ -1211,7 +1329,7 @@ app.post(
         autoUnderLoadingAt,
         autoUnderLoadingApplied: false,
         manualStatusOverride: false,
-      };
+      });
 
       db.prepare(
         `INSERT INTO tickets (id, ticket_number, sequence_number, date, data_json, version, created_by, updated_by, created_at, updated_at)
@@ -1229,7 +1347,7 @@ app.post(
       );
 
       upsertDriverMasterInternal(record);
-      return { ...record, version: 1, createdBy: req.auth!.user.username, updatedBy: req.auth!.user.username };
+      return normalizeTicketRecord({ ...record, version: 1, createdBy: req.auth!.user.username, updatedBy: req.auth!.user.username });
     });
 
     const created = createTx();
@@ -1293,18 +1411,32 @@ app.patch(
       }
 
       const now = Date.now();
+      const shouldAutoUnderLoading =
+        Boolean(cleanUpdates.loadingSlip) &&
+        !cleanUpdates.status &&
+        !prev.loadingSlip?.isLocked &&
+        prev.status !== 'completed' &&
+        prev.status !== 'cancelled';
+      const effectiveUpdates = shouldAutoUnderLoading
+        ? {
+            ...cleanUpdates,
+            status: 'under_loading',
+            timeLoadingStarted: cleanUpdates.timeLoadingStarted || prev.timeLoadingStarted || formatPlantTime(now),
+          }
+        : cleanUpdates;
+
       const hasManualStatusChange =
-        typeof cleanUpdates.status === 'string' && cleanUpdates.status !== prev.status;
-      const merged = {
+        typeof effectiveUpdates.status === 'string' && effectiveUpdates.status !== prev.status;
+      const merged = normalizeTicketRecord({
         ...prev,
-        ...cleanUpdates,
+        ...effectiveUpdates,
         id: prev.id,
         ticketNumber: prev.ticketNumber,
         sequenceNumber: prev.sequenceNumber,
         createdAt: prev.createdAt || now,
         manualStatusOverride: hasManualStatusChange ? true : Boolean(prev.manualStatusOverride),
         updatedAt: now,
-      };
+      });
       const nextVersion = existing.version + 1;
 
       db.prepare(
@@ -1316,12 +1448,12 @@ app.patch(
       }
 
       return {
-        ticket: {
+        ticket: normalizeTicketRecord({
           ...merged,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
-        },
+        }),
         slipSaved: Boolean(cleanUpdates.loadingSlip),
       };
     })();
@@ -1365,26 +1497,26 @@ app.post(
         return { errorStatus: 404 as const, error: 'Ticket record not found.' };
       }
 
-      const prev = JSON.parse(existing.data_json);
+      const prev = normalizeTicketRecord(JSON.parse(existing.data_json));
       // Do not modify locked or completed slips
       if (prev.loadingSlip?.isLocked || prev.status === 'completed' || prev.status === 'cancelled') {
         return {
-          ticket: {
+          ticket: normalizeTicketRecord({
             ...prev,
             version: existing.version,
             createdBy: existing.created_by || undefined,
-          },
+          }),
           changed: false,
         };
       }
 
       if (prev.status === 'under_loading') {
         return {
-          ticket: {
+          ticket: normalizeTicketRecord({
             ...prev,
             version: existing.version,
             createdBy: existing.created_by || undefined,
-          },
+          }),
           changed: false,
         };
       }
@@ -1397,14 +1529,14 @@ app.post(
           }
         : undefined;
 
-      const updated = {
+      const updated = normalizeTicketRecord({
         ...prev,
         ...(nextSlip ? { loadingSlip: nextSlip } : {}),
         status: 'under_loading',
         timeLoadingStarted: prev.timeLoadingStarted || formatPlantTime(now),
         manualStatusOverride: true,
         updatedAt: now,
-      };
+      });
       const nextVersion = existing.version + 1;
 
       db.prepare(`UPDATE tickets SET data_json = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ?`).run(
@@ -1416,12 +1548,12 @@ app.post(
       );
 
       return {
-        ticket: {
+        ticket: normalizeTicketRecord({
           ...updated,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
-        },
+        }),
         changed: true,
       };
     })();
@@ -1481,7 +1613,7 @@ app.patch(
         };
       }
 
-      const prev = JSON.parse(existing.data_json);
+      const prev = normalizeTicketRecord(JSON.parse(existing.data_json));
       if (prev.loadingSlip?.isLocked || prev.status === 'completed') {
         return {
           errorStatus: 409 as const,
@@ -1508,7 +1640,7 @@ app.patch(
             target.loadedAt = now;
             target.loadedByName = operatorName;
             if ((target.loadedQty === undefined || target.loadedQty === '') && target.qty) {
-              target.loadedQty = String(target.qty);
+              target.loadedQty = upperStr(target.qty);
             }
           } else {
             target.loadedAt = undefined;
@@ -1516,11 +1648,11 @@ app.patch(
           }
         }
         if (typeof upd.loadedQty === 'string') {
-          target.loadedQty = upd.loadedQty.slice(0, 60);
+          target.loadedQty = upperStr(upd.loadedQty).slice(0, 60);
         }
         // Only update remarks if explicitly supplied; preserve manual Production Date
         if (typeof upd.remarks === 'string') {
-          target.remarks = upd.remarks.slice(0, 120);
+          target.remarks = upperStr(upd.remarks).slice(0, 120);
         }
       }
 
@@ -1532,14 +1664,14 @@ app.patch(
       };
 
       const nextStatus = prev.status === 'waiting' || prev.status === 'called' ? 'under_loading' : prev.status;
-      const updated = {
+      const updated = normalizeTicketRecord({
         ...prev,
         status: nextStatus,
         timeLoadingStarted: prev.timeLoadingStarted || formatPlantTime(now),
         manualStatusOverride: true,
         loadingSlip: nextSlip,
         updatedAt: now,
-      };
+      });
 
       const nextVersion = existing.version + 1;
       db.prepare(`UPDATE tickets SET data_json = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ?`).run(
@@ -1551,12 +1683,12 @@ app.patch(
       );
 
       return {
-        ticket: {
+        ticket: normalizeTicketRecord({
           ...updated,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
-        },
+        }),
       };
     })();
 
@@ -1609,7 +1741,7 @@ app.post(
         };
       }
 
-      const prev = JSON.parse(existing.data_json);
+      const prev = normalizeTicketRecord(JSON.parse(existing.data_json));
       if (prev.loadingSlip?.isLocked || prev.status === 'completed') {
         return {
           errorStatus: 409 as const,
@@ -1647,7 +1779,7 @@ app.post(
         loadingCompletedBy: operatorName,
       };
 
-      const updated = {
+      const updated = normalizeTicketRecord({
         ...prev,
         status: 'completed',
         timeLoadingStarted: prev.timeLoadingStarted || completedTime,
@@ -1655,7 +1787,7 @@ app.post(
         manualStatusOverride: true,
         loadingSlip: lockedSlip,
         updatedAt: now,
-      };
+      });
 
       const nextVersion = existing.version + 1;
       db.prepare(`UPDATE tickets SET data_json = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ?`).run(
@@ -1667,19 +1799,19 @@ app.post(
       );
 
       const alertId = `alt-${now}-${crypto.randomBytes(3).toString('hex')}`;
-      const delNoteNumber = lockedSlip.delNoteNumber || prev.delNoteNumber || '—';
-      const truckNumber = prev.truckNumber || '—';
-      const gateNumber = prev.gateNumber || '—';
+      const delNoteNumber = upperStr(lockedSlip.delNoteNumber || prev.delNoteNumber) || '—';
+      const truckNumber = upperStr(prev.truckNumber) || '—';
+      const gateNumber = String(prev.gateNumber || '').trim() || '—';
 
       db.prepare(
         `INSERT INTO loading_alerts (id, ticket_id, ticket_number, del_note_number, truck_number, gate_number, completed_by, completed_time, created_at, dismissed_by_json)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`
-      ).run(alertId, ticketId, prev.ticketNumber, delNoteNumber, truckNumber, gateNumber, operatorName, completedDateTime, now);
+      ).run(alertId, ticketId, upperStr(prev.ticketNumber), delNoteNumber, truckNumber, gateNumber, operatorName, completedDateTime, now);
 
       const alert = {
         id: alertId,
         ticketId,
-        ticketNumber: prev.ticketNumber,
+        ticketNumber: upperStr(prev.ticketNumber),
         delNoteNumber,
         truckNumber,
         gateNumber,
@@ -1689,12 +1821,12 @@ app.post(
       };
 
       return {
-        ticket: {
+        ticket: normalizeTicketRecord({
           ...updated,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
-        },
+        }),
         alert,
       };
     })();
@@ -1772,9 +1904,9 @@ app.get(
       .map((r) => ({
         id: r.id,
         ticketId: r.ticket_id,
-        ticketNumber: r.ticket_number,
-        delNoteNumber: r.del_note_number,
-        truckNumber: r.truck_number,
+        ticketNumber: upperStr(r.ticket_number),
+        delNoteNumber: upperStr(r.del_note_number),
+        truckNumber: upperStr(r.truck_number),
         gateNumber: r.gate_number,
         completedBy: r.completed_by,
         completedTime: r.completed_time,
@@ -1869,10 +2001,10 @@ app.post(
     }
 
     const now = Date.now();
-    const record = {
+    const record = normalizeTicketRecord({
       ...payload,
       updatedAt: now,
-    };
+    });
 
     db.prepare(
       `INSERT OR REPLACE INTO tickets (id, ticket_number, sequence_number, date, data_json, version, created_by, updated_by, created_at, updated_at)
@@ -1899,7 +2031,7 @@ app.post(
       ipAddress: getClientIp(req),
     });
 
-    res.json({ ticket: { ...record, version: 1, updatedBy: req.auth!.user.username } });
+    res.json({ ticket: normalizeTicketRecord({ ...record, version: 1, updatedBy: req.auth!.user.username }) });
   }
 );
 
@@ -1908,25 +2040,34 @@ app.get(
   '/api/drivers',
   requireAuth,
   requirePasswordChanged,
-  requirePermission('tickets.view'),
+  requireAnyPermission([
+    'tickets.view',
+    'drivers.manage',
+    'ex_factory.view',
+    'ex_factory.create',
+    'ex_factory.update',
+  ]),
   (req: Request, res: Response) => {
-    if (req.auth!.user.roleName === 'forklift_operator') {
+    const roleName = req.auth!.user.roleName;
+    if (roleName === 'forklift_operator' || roleName === 'liquid_store_operator') {
       logAudit({
         actorUserId: req.auth!.user.id,
         actorUsername: req.auth!.user.username,
         action: 'UNAUTHORIZED_ACCESS',
         targetType: 'route',
         targetId: 'GET /api/drivers',
-        details: 'Forklift Operator denied access to Driver Master directory',
+        details: `Restricted operator (${roleName}) denied access to Driver Master directory`,
         ipAddress: getClientIp(req),
       });
-      res.status(403).json({ error: 'Access denied: Forklift Operators are restricted to the Forklift Operator Section.' });
+      res.status(403).json({
+        error: 'Access denied: Your account is restricted from accessing the Driver Master directory.',
+      });
       return;
     }
     const rows = db.prepare(`SELECT data_json FROM drivers ORDER BY updated_at DESC`).all() as Array<{
       data_json: string;
     }>;
-    res.json({ drivers: rows.map((r) => JSON.parse(r.data_json)) });
+    res.json({ drivers: rows.map((r) => normalizeDriverRecord(JSON.parse(r.data_json))) });
   }
 );
 
@@ -1938,25 +2079,25 @@ app.post(
   requirePermission('drivers.manage'),
   (req: Request, res: Response) => {
     const body = req.body || {};
-    const cleanTruck = String(body.truckNumber || '').trim().toUpperCase();
-    if (!cleanTruck || !String(body.driverName || '').trim() || !String(body.driverPhone || '').trim()) {
+    const cleanTruck = upperStr(body.truckNumber);
+    if (!cleanTruck || !upperStr(body.driverName) || !upperStr(body.driverPhone)) {
       res.status(400).json({ error: 'Vehicle Number, Driver Name, and Mobile Number are required.' });
       return;
     }
 
     const now = Date.now();
     const id = body.id || `drv-${now}-${crypto.randomBytes(3).toString('hex')}`;
-    const record = {
+    const record = normalizeDriverRecord({
       id,
       truckNumber: cleanTruck,
-      driverName: String(body.driverName).trim(),
-      driverPhone: String(body.driverPhone).trim(),
-      iqamaNumber: String(body.iqamaNumber || '').trim(),
-      transporterName: String(body.transporterName || '').trim(),
-      defaultDestination: String(body.defaultDestination || '').trim(),
+      driverName: upperStr(body.driverName),
+      driverPhone: upperStr(body.driverPhone),
+      iqamaNumber: upperStr(body.iqamaNumber),
+      transporterName: upperStr(body.transporterName),
+      defaultDestination: upperStr(body.defaultDestination),
       lastVisited: body.lastVisited || new Date().toISOString().split('T')[0],
       tripCount: Number(body.tripCount) || 1,
-    };
+    });
 
     const existing = db.prepare(`SELECT id FROM drivers WHERE truck_number = ? COLLATE NOCASE`).get(cleanTruck) as
       | { id: string }
@@ -2000,13 +2141,13 @@ app.put(
     }
     const prev = JSON.parse(existing.data_json);
     const body = req.body || {};
-    const cleanTruck = String(body.truckNumber || prev.truckNumber).trim().toUpperCase();
-    const updated = {
+    const cleanTruck = upperStr(body.truckNumber || prev.truckNumber);
+    const updated = normalizeDriverRecord({
       ...prev,
       ...body,
       id,
       truckNumber: cleanTruck,
-    };
+    });
     db.prepare(`UPDATE drivers SET truck_number = ?, data_json = ?, updated_at = ? WHERE id = ?`).run(
       cleanTruck,
       JSON.stringify(updated),
@@ -2039,8 +2180,8 @@ app.get('/api/settings', requireAuth, requirePasswordChanged, (_req: Request, re
     | undefined;
 
   res.json({
-    settings: activeRow ? JSON.parse(activeRow.value_json) : null,
-    defaultSettings: defaultRow ? JSON.parse(defaultRow.value_json) : null,
+    settings: activeRow ? normalizeSettingsRecord(JSON.parse(activeRow.value_json)) : null,
+    defaultSettings: defaultRow ? normalizeSettingsRecord(JSON.parse(defaultRow.value_json)) : null,
   });
 });
 
@@ -2051,7 +2192,14 @@ app.put(
   requireCsrf,
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
-    const newSettings = req.body || {};
+    const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
+    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl);
+    if (!logoCheck.ok) {
+      res.status(400).json({ error: logoCheck.error });
+      return;
+    }
+    newSettings.logoDataUrl = logoCheck.value;
+
     const now = Date.now();
     db.prepare(`INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`).run(
       JSON.stringify(newSettings),
@@ -2080,7 +2228,14 @@ app.put(
   requireCsrf,
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
-    const newSettings = req.body || {};
+    const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
+    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl);
+    if (!logoCheck.ok) {
+      res.status(400).json({ error: logoCheck.error });
+      return;
+    }
+    newSettings.logoDataUrl = logoCheck.value;
+
     const now = Date.now();
     db.transaction(() => {
       db.prepare(
@@ -2107,8 +2262,8 @@ app.put(
 
 // One-time safe migration from legacy browser localStorage into empty SQLite DB
 app.post('/api/bootstrap/migrate', requireAuth, requirePasswordChanged, requireCsrf, (req: Request, res: Response) => {
-  if (req.auth!.user.roleName === 'forklift_operator') {
-    res.status(403).json({ error: 'Access denied: Forklift Operators cannot run data migration.' });
+  if (req.auth!.user.roleName === 'forklift_operator' || req.auth!.user.roleName === 'liquid_store_operator') {
+    res.status(403).json({ error: 'Access denied for restricted operator accounts.' });
     return;
   }
   const ticketCount = (db.prepare(`SELECT COUNT(*) as cnt FROM tickets`).get() as { cnt: number }).cnt;
@@ -2128,16 +2283,17 @@ app.post('/api/bootstrap/migrate', requireAuth, requirePasswordChanged, requireC
       );
       for (const t of tickets) {
         if (t && t.id && t.ticketNumber && t.date) {
+          const normT = normalizeTicketRecord(t);
           insertTicket.run(
-            t.id,
-            t.ticketNumber,
-            Number(t.sequenceNumber) || 1,
-            t.date,
-            JSON.stringify(t),
+            normT.id,
+            normT.ticketNumber,
+            Number(normT.sequenceNumber) || 1,
+            normT.date,
+            JSON.stringify(normT),
             req.auth!.user.username,
             req.auth!.user.username,
-            t.createdAt || now,
-            t.updatedAt || now
+            normT.createdAt || now,
+            normT.updatedAt || now
           );
         }
       }
@@ -2149,7 +2305,8 @@ app.post('/api/bootstrap/migrate', requireAuth, requirePasswordChanged, requireC
       );
       for (const d of drivers) {
         if (d && d.id && d.truckNumber) {
-          insertDriver.run(d.id, String(d.truckNumber).toUpperCase(), JSON.stringify(d), now);
+          const normD = normalizeDriverRecord(d);
+          insertDriver.run(normD.id, normD.truckNumber, JSON.stringify(normD), now);
         }
       }
     }
@@ -2158,12 +2315,12 @@ app.post('/api/bootstrap/migrate', requireAuth, requirePasswordChanged, requireC
       if (settings && typeof settings === 'object') {
         db.prepare(
           `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`
-        ).run(JSON.stringify(settings), req.auth!.user.username, now);
+        ).run(JSON.stringify(normalizeSettingsRecord(settings)), req.auth!.user.username, now);
       }
       if (defaultSettings && typeof defaultSettings === 'object') {
         db.prepare(
           `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default', ?, ?, ?)`
-        ).run(JSON.stringify(defaultSettings), req.auth!.user.username, now);
+        ).run(JSON.stringify(normalizeSettingsRecord(defaultSettings)), req.auth!.user.username, now);
       }
     }
   })();
@@ -2188,9 +2345,9 @@ app.get(
   (_req: Request, res: Response) => {
     const tickets = (db.prepare(`SELECT data_json FROM tickets ORDER BY date DESC, sequence_number ASC`).all() as Array<{
       data_json: string;
-    }>).map((r) => JSON.parse(r.data_json));
+    }>).map((r) => normalizeTicketRecord(JSON.parse(r.data_json)));
     const drivers = (db.prepare(`SELECT data_json FROM drivers`).all() as Array<{ data_json: string }>).map((r) =>
-      JSON.parse(r.data_json)
+      normalizeDriverRecord(JSON.parse(r.data_json))
     );
     const activeRow = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
       | { value_json: string }
@@ -2202,8 +2359,8 @@ app.get(
     res.json({
       tickets,
       drivers,
-      settings: activeRow ? JSON.parse(activeRow.value_json) : undefined,
-      defaultSettings: defaultRow ? JSON.parse(defaultRow.value_json) : undefined,
+      settings: activeRow ? normalizeSettingsRecord(JSON.parse(activeRow.value_json)) : undefined,
+      defaultSettings: defaultRow ? normalizeSettingsRecord(JSON.parse(defaultRow.value_json)) : undefined,
       exportedAt: new Date().toISOString(),
     });
   }
@@ -2222,16 +2379,17 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
       );
       for (const t of tickets) {
         if (t && t.id && t.ticketNumber && t.date) {
+          const normT = normalizeTicketRecord(t);
           insertTicket.run(
-            t.id,
-            t.ticketNumber,
-            Number(t.sequenceNumber) || 1,
-            t.date,
-            JSON.stringify(t),
+            normT.id,
+            normT.ticketNumber,
+            Number(normT.sequenceNumber) || 1,
+            normT.date,
+            JSON.stringify(normT),
             req.auth!.user.username,
             req.auth!.user.username,
-            t.createdAt || now,
-            t.updatedAt || now
+            normT.createdAt || now,
+            normT.updatedAt || now
           );
         }
       }
@@ -2243,19 +2401,20 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
       );
       for (const d of drivers) {
         if (d && d.id && d.truckNumber) {
-          insertDriver.run(d.id, String(d.truckNumber).toUpperCase(), JSON.stringify(d), now);
+          const normD = normalizeDriverRecord(d);
+          insertDriver.run(normD.id, normD.truckNumber, JSON.stringify(normD), now);
         }
       }
     }
     if (settings && typeof settings === 'object') {
       db.prepare(
         `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`
-      ).run(JSON.stringify(settings), req.auth!.user.username, now);
+      ).run(JSON.stringify(normalizeSettingsRecord(settings)), req.auth!.user.username, now);
     }
     if (defaultSettings && typeof defaultSettings === 'object') {
       db.prepare(
         `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default', ?, ?, ?)`
-      ).run(JSON.stringify(defaultSettings), req.auth!.user.username, now);
+      ).run(JSON.stringify(normalizeSettingsRecord(defaultSettings)), req.auth!.user.username, now);
     }
   })();
 
@@ -2270,6 +2429,9 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
 
   res.json({ ok: true });
 });
+
+app.use('/api/liquid', liquidRouter);
+app.use('/api/ex-factory', exFactoryRouter);
 
 // Reject any unknown /api route cleanly with JSON 404
 app.use('/api', (_req: Request, res: Response) => {

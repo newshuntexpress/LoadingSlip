@@ -37,9 +37,24 @@ const USER_ASSIGNABLE_PERMISSIONS = [
   { key: 'slips.print', label: 'Print / Export PDF Slips & Tokens' },
   { key: 'drivers.manage', label: 'Manage Driver & Vehicle Master' },
   { key: 'reports.view', label: 'View & Export Daily Reports' },
+  { key: 'liquid.store', label: 'Liquid Material Camp Store (Tanks, Inward/Outward & Reports)' },
+  { key: 'ex_factory.view', label: 'Ex-Factory Dispatch: View & Export Records' },
+  { key: 'ex_factory.create', label: 'Ex-Factory Dispatch: Create / Save Entries' },
+  { key: 'ex_factory.update', label: 'Ex-Factory Dispatch: Edit / Update Entries' },
+  { key: 'ex_factory.delete', label: 'Ex-Factory Dispatch: Delete Entries' },
 ];
 
-const DEFAULT_USER_PERMS = ['tickets.view', 'tickets.create', 'tickets.update', 'slips.print', 'reports.view'];
+const DEFAULT_USER_PERMS = [
+  'tickets.view',
+  'tickets.create',
+  'tickets.update',
+  'slips.print',
+  'reports.view',
+  'liquid.store',
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
+];
 
 const FORKLIFT_ASSIGNABLE_PERMISSIONS = [
   { key: 'tickets.view', label: 'View Assigned Loading Slips & Queue' },
@@ -47,6 +62,21 @@ const FORKLIFT_ASSIGNABLE_PERMISSIONS = [
 ];
 
 const DEFAULT_FORKLIFT_PERMS = ['tickets.view', 'forklift.operate'];
+
+const LIQUID_STORE_ASSIGNABLE_PERMISSIONS = [
+  { key: 'liquid.store', label: 'Access & Manage Liquid Material Camp Store Only' },
+];
+
+const DEFAULT_LIQUID_STORE_PERMS = ['liquid.store'];
+
+const EX_FACTORY_ASSIGNABLE_PERMISSIONS = [
+  { key: 'ex_factory.view', label: 'View, Search & Export Ex-Factory Dispatch Entries' },
+  { key: 'ex_factory.create', label: 'Create & Save New Ex-Factory Entries' },
+  { key: 'ex_factory.update', label: 'Edit & Update Existing Ex-Factory Entries' },
+  { key: 'ex_factory.delete', label: 'Delete Ex-Factory Entries' },
+];
+
+const DEFAULT_EX_FACTORY_PERMS = ['ex_factory.view', 'ex_factory.create', 'ex_factory.update'];
 
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   currentUser,
@@ -173,7 +203,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setEditFullName(u.fullName);
     setEditEmail(u.email || '');
     setEditRoleName(
-      u.roleName === 'admin' ? 'admin' : u.roleName === 'forklift_operator' ? 'forklift_operator' : 'user'
+      u.roleName === 'admin'
+        ? 'admin'
+        : u.roleName === 'forklift_operator'
+        ? 'forklift_operator'
+        : u.roleName === 'liquid_store_operator'
+        ? 'liquid_store_operator'
+        : u.roleName === 'ex_factory_operator'
+        ? 'ex_factory_operator'
+        : 'user'
     );
     setEditIsActive(u.isActive);
     setEditPerms(u.permissions || []);
@@ -455,6 +493,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div className="relative">
                         <input
                           type={showNewPass ? 'text' : 'password'}
+                          data-preserve-case="true"
                           required
                           value={newTempPassword}
                           onChange={(e) => setNewTempPassword(e.target.value)}
@@ -480,6 +519,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           setNewRoleName(nextRole);
                           if (nextRole === 'forklift_operator') {
                             setNewPerms(DEFAULT_FORKLIFT_PERMS);
+                          } else if (nextRole === 'liquid_store_operator') {
+                            setNewPerms(DEFAULT_LIQUID_STORE_PERMS);
+                          } else if (nextRole === 'ex_factory_operator') {
+                            setNewPerms(DEFAULT_EX_FACTORY_PERMS);
                           } else if (nextRole === 'user') {
                             setNewPerms(DEFAULT_USER_PERMS);
                           }
@@ -496,6 +539,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           <>
                             <option value="user">User / Operator (user)</option>
                             <option value="forklift_operator">Forklift Operator (forklift_operator)</option>
+                            <option value="liquid_store_operator">Liquid Store Operator (liquid_store_operator)</option>
+                            <option value="ex_factory_operator">Ex-Factory Operator (ex_factory_operator)</option>
                             <option value="admin">Administrator (admin)</option>
                           </>
                         )}
@@ -516,10 +561,35 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   </div>
 
                   {newRoleName === 'user' && (
-                    <div className="bg-white border border-neutral-200 rounded-xl p-3">
-                      <p className="text-[11px] font-bold text-neutral-700 mb-2">
-                        Assigned Section & Operation Permissions:
-                      </p>
+                    <div className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold text-neutral-700">
+                          Assigned Section & Operation Permissions:
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setNewPerms(['liquid.store'])}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 cursor-pointer"
+                          >
+                            Liquid Store Only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewPerms(DEFAULT_EX_FACTORY_PERMS)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
+                          >
+                            Ex-Factory Only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewPerms(DEFAULT_USER_PERMS)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 cursor-pointer"
+                          >
+                            Reset Standard
+                          </button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {USER_ASSIGNABLE_PERMISSIONS.map((perm) => (
                           <label
@@ -562,6 +632,60 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       </div>
                       <p className="text-[10px] text-emerald-800">
                         All other dashboards, menus, reports, settings, and admin panels are completely hidden from Forklift Operator accounts.
+                      </p>
+                    </div>
+                  )}
+
+                  {newRoleName === 'liquid_store_operator' && (
+                    <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 space-y-2">
+                      <p className="text-[11px] font-bold text-sky-900">
+                        Liquid Store Operator Access Scope (Restricted to Liquid Material Camp Store Only):
+                      </p>
+                      <div className="grid grid-cols-1 gap-2">
+                        {LIQUID_STORE_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                          <label
+                            key={perm.key}
+                            className="flex items-center gap-2 text-xs text-sky-950 cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={newPerms.includes(perm.key)}
+                              onChange={() => togglePerm(newPerms, setNewPerms, perm.key)}
+                              className="w-3.5 h-3.5 rounded border-sky-400 text-sky-600"
+                            />
+                            <span>{perm.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-sky-800">
+                        All Gate Queue, Tickets, Forklift, Ex-Factory, Driver Master, Settings, and Admin panels are completely hidden from Liquid Store Operator accounts.
+                      </p>
+                    </div>
+                  )}
+
+                  {newRoleName === 'ex_factory_operator' && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                      <p className="text-[11px] font-bold text-amber-900">
+                        Ex-Factory Operator Access Scope (Restricted to Ex-Factory Dispatch Only):
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {EX_FACTORY_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                          <label
+                            key={perm.key}
+                            className="flex items-center gap-2 text-xs text-amber-950 cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={newPerms.includes(perm.key)}
+                              onChange={() => togglePerm(newPerms, setNewPerms, perm.key)}
+                              className="w-3.5 h-3.5 rounded border-amber-400 text-amber-600"
+                            />
+                            <span>{perm.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-amber-800">
+                        All Gate Queue, Tickets, Forklift, Liquid Store, Driver Master, Settings, and Admin panels are completely hidden from Ex-Factory Operator accounts.
                       </p>
                     </div>
                   )}
@@ -629,6 +753,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                     ? 'bg-indigo-50 text-indigo-900 border-indigo-200'
                                     : u.roleName === 'forklift_operator'
                                     ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                                    : u.roleName === 'liquid_store_operator'
+                                    ? 'bg-sky-50 text-sky-900 border-sky-200'
+                                    : u.roleName === 'ex_factory_operator'
+                                    ? 'bg-amber-50 text-amber-900 border-amber-200'
                                     : 'bg-neutral-100 text-neutral-800 border-neutral-200'
                                 }`}
                               >
@@ -801,6 +929,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               setEditRoleName(nextRole);
                               if (nextRole === 'forklift_operator') {
                                 setEditPerms(DEFAULT_FORKLIFT_PERMS);
+                              } else if (nextRole === 'liquid_store_operator') {
+                                setEditPerms(DEFAULT_LIQUID_STORE_PERMS);
+                              } else if (nextRole === 'ex_factory_operator') {
+                                setEditPerms(DEFAULT_EX_FACTORY_PERMS);
                               } else if (nextRole === 'user' && editingUser.roleName !== 'user') {
                                 setEditPerms(DEFAULT_USER_PERMS);
                               } else if (nextRole === 'user') {
@@ -819,6 +951,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               <>
                                 <option value="user">User / Operator (user)</option>
                                 <option value="forklift_operator">Forklift Operator (forklift_operator)</option>
+                                <option value="liquid_store_operator">Liquid Store Operator (liquid_store_operator)</option>
+                                <option value="ex_factory_operator">Ex-Factory Operator (ex_factory_operator)</option>
                                 <option value="admin">Administrator (admin)</option>
                               </>
                             )}
@@ -841,9 +975,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
                       {editRoleName === 'user' ? (
                         <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 space-y-2">
-                          <p className="text-[11px] font-bold text-neutral-800">
-                            Granular Access Permissions
-                          </p>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-[11px] font-bold text-neutral-800">
+                              Granular Access Permissions
+                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditPerms(['liquid.store'])}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 cursor-pointer"
+                              >
+                                Liquid Store Only
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditPerms(DEFAULT_EX_FACTORY_PERMS)}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 cursor-pointer"
+                              >
+                                Ex-Factory Only
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditPerms(DEFAULT_USER_PERMS)}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white hover:bg-neutral-100 text-neutral-700 border border-neutral-200 cursor-pointer"
+                              >
+                                Reset Standard
+                              </button>
+                            </div>
+                          </div>
                           <div className="space-y-1.5">
                             {USER_ASSIGNABLE_PERMISSIONS.map((perm) => (
                               <label
@@ -886,9 +1045,59 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             This user can only view and operate the Forklift Operator Section upon sign-in.
                           </p>
                         </div>
+                      ) : editRoleName === 'liquid_store_operator' ? (
+                        <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 space-y-2">
+                          <p className="text-[11px] font-bold text-sky-900">
+                            Liquid Store Operator Permissions (Restricted Section Only)
+                          </p>
+                          <div className="space-y-1.5">
+                            {LIQUID_STORE_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                              <label
+                                key={perm.key}
+                                className="flex items-center gap-2 text-xs text-sky-950 cursor-pointer select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editPerms.includes(perm.key)}
+                                  onChange={() => togglePerm(editPerms, setEditPerms, perm.key)}
+                                  className="w-3.5 h-3.5 rounded border-sky-400 text-sky-600"
+                                />
+                                <span>{perm.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-sky-800">
+                            This user can only view and manage the Liquid Material Camp Store section upon sign-in.
+                          </p>
+                        </div>
+                      ) : editRoleName === 'ex_factory_operator' ? (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                          <p className="text-[11px] font-bold text-amber-900">
+                            Ex-Factory Operator Permissions (Restricted Section Only)
+                          </p>
+                          <div className="space-y-1.5">
+                            {EX_FACTORY_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                              <label
+                                key={perm.key}
+                                className="flex items-center gap-2 text-xs text-amber-950 cursor-pointer select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editPerms.includes(perm.key)}
+                                  onChange={() => togglePerm(editPerms, setEditPerms, perm.key)}
+                                  className="w-3.5 h-3.5 rounded border-amber-400 text-amber-600"
+                                />
+                                <span>{perm.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-amber-800">
+                            This user can only view and manage the Ex-Factory Dispatch section upon sign-in.
+                          </p>
+                        </div>
                       ) : (
                         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-900">
-                          Administrators automatically have full permissions ({permissionsMeta.length || 11} capabilities) across all sections.
+                          Administrators automatically have full permissions ({permissionsMeta.length || 16} capabilities) across all sections.
                         </div>
                       )}
                     </div>
@@ -943,6 +1152,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         <div className="relative">
                           <input
                             type={showResetPass ? 'text' : 'password'}
+                            data-preserve-case="true"
                             required
                             value={resetTempPass}
                             onChange={(e) => setResetTempPass(e.target.value)}
@@ -1054,7 +1264,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             <span className="font-bold font-mono text-neutral-900">@{s.username}</span>
                             <p className="text-[11px] text-neutral-500">{s.fullName}</p>
                           </td>
-                          <td className="py-2.5 px-3 capitalize font-semibold">{s.roleName}</td>
+                          <td className="py-2.5 px-3 uppercase font-semibold">{s.roleName}</td>
                           <td className="py-2.5 px-3 font-mono text-[11px]">{s.ipAddress || '—'}</td>
                           <td className="py-2.5 px-3 text-[11px]">{formatDateTime(s.lastActivityAt)}</td>
                           <td className="py-2.5 px-3 text-[11px]">{formatDateTime(s.expiresAt)}</td>

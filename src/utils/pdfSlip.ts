@@ -2,11 +2,13 @@ import { jsPDF } from 'jspdf';
 import { TicketRecord, CompanySettings } from '../types';
 import { formatSaudiPhoneNumber } from './whatsapp';
 import { formatDisplayDate } from '../services/storage';
+import { drawPdfLogo } from './logo';
 
 function truncateText(doc: jsPDF, text: string, maxWidth: number): string {
-  if (!text) return '';
-  if (doc.getTextWidth(text) <= maxWidth) return text;
-  let truncated = text;
+  const str = String(text || '');
+  if (!str) return '';
+  if (doc.getTextWidth(str) <= maxWidth) return str;
+  let truncated = str;
   while (truncated.length > 0 && doc.getTextWidth(truncated + '...') > maxWidth) {
     truncated = truncated.slice(0, -1);
   }
@@ -35,7 +37,7 @@ function drawSingleSlipCopy(
   doc: jsPDF,
   ticket: TicketRecord,
   settings: CompanySettings,
-  copyType: 'ORIGINAL (OFFICE USE)' | 'DUPLICATE (FOR FORKLIFT OPERATOR)',
+  copyType: 'Original (Office Use)' | 'Duplicate (For Forklift Operator)',
   yStart: number,
   storeInchargeFullName?: string
 ) {
@@ -69,16 +71,20 @@ function drawSingleSlipCopy(
 
   // Header section
   const headerY = yStart + 3;
+  const hasLogo = drawPdfLogo(doc, settings.logoDataUrl, innerX, headerY - 0.5, 10, 10);
+  const textX = hasLogo ? innerX + 12 : innerX;
+  const maxTextW = hasLogo ? 108 : 120;
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
-  doc.text(truncateText(doc, settings.companyName.toUpperCase(), 120), innerX, headerY + 3.5);
+  doc.text(truncateText(doc, settings.companyName, maxTextW), textX, headerY + 3.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(65, 65, 65);
   const infoLine = `${settings.address} | Ph: ${settings.phone} | GSTIN: ${settings.gstin}`;
-  doc.text(truncateText(doc, infoLine, 122), innerX, headerY + 7.8);
+  doc.text(truncateText(doc, infoLine, maxTextW + 2), textX, headerY + 7.8);
 
   // Right header badge + title
   doc.setFont('helvetica', 'bold');
@@ -94,7 +100,7 @@ function drawSingleSlipCopy(
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('MATERIAL LOADING SLIP', innerX + innerW, headerY + 9.2, { align: 'right' });
+  doc.text('Material Loading Slip', innerX + innerW, headerY + 9.2, { align: 'right' });
 
   // Divider below header
   const dividerY = yStart + 14;
@@ -121,16 +127,16 @@ function drawSingleSlipCopy(
 
   // Row 1 cells
   const r1Cells = [
-    { label: 'DEL NOTE NO:', value: slip?.delNoteNumber || ticket.delNoteNumber || '—', bold: true, size: 9 },
+    { label: 'Del Note No:', value: slip?.delNoteNumber || ticket.delNoteNumber || '—', bold: true, size: 9 },
     {
-      label: 'DATE & TIME:',
+      label: 'Date & Time:',
       value: `${formatDisplayDate(ticket.date)} | ${ticket.timeLoadingStarted || ticket.timeIn}`,
       bold: true,
       size: 7.5,
     },
-    { label: 'TICKET NO:', value: `${ticket.ticketNumber} (#${ticket.sequenceNumber})`, bold: true, size: 7.5 },
+    { label: 'Ticket No:', value: `${ticket.ticketNumber} (#${ticket.sequenceNumber})`, bold: true, size: 7.5 },
     {
-      label: 'GATE & QUEUE POS:',
+      label: 'Gate & Queue Pos:',
       value: `${ticket.gateNumber} (Seq. #${ticket.gateSequenceNumber})`,
       bold: true,
       size: 8.5,
@@ -160,7 +166,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(90, 90, 90);
-  doc.text('TRUCK NUMBER:', curX + 1.5, r2Y + 3.2);
+  doc.text('Truck Number:', curX + 1.5, r2Y + 3.2);
   doc.setFontSize(9.5);
   doc.setTextColor(0, 0, 0);
   doc.text(truncateText(doc, ticket.truckNumber || '—', colWidths[0] - 3), curX + 1.5, r2Y + 8.5);
@@ -170,7 +176,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(5.5);
   doc.setTextColor(90, 90, 90);
-  doc.text('DRIVER NAME:', curX + 1.5, r2Y + 2.6);
+  doc.text('Driver Name:', curX + 1.5, r2Y + 2.6);
   doc.setFontSize(7.5);
   doc.setTextColor(0, 0, 0);
   doc.text(truncateText(doc, ticket.driverName || '—', colWidths[1] - 3), curX + 1.5, r2Y + 5.5);
@@ -184,7 +190,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(5.2);
   doc.setTextColor(100, 100, 100);
-  doc.text('MOBILE NO:', curX + 1.5, r2Y + 8.4);
+  doc.text('Mobile No:', curX + 1.5, r2Y + 8.4);
   doc.setFontSize(7.2);
   doc.setTextColor(0, 0, 0);
   doc.text(
@@ -198,7 +204,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(90, 90, 90);
-  doc.text('DESTINATION / PLACE:', curX + 1.5, r2Y + 3.2);
+  doc.text('Destination / Place:', curX + 1.5, r2Y + 3.2);
   doc.setFontSize(8.2);
   doc.setTextColor(30, 58, 138);
   doc.text(
@@ -212,7 +218,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(90, 90, 90);
-  doc.text('TRANSPORTER:', curX + 1.5, r2Y + 3.2);
+  doc.text('Transporter:', curX + 1.5, r2Y + 3.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.8);
   doc.setTextColor(0, 0, 0);
@@ -351,7 +357,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(0, 0, 0);
-  doc.text('TOTAL DISPATCHED :', innerX + tCols[0] + tCols[1] + tCols[2] - 2, curY + 4.5, { align: 'right' });
+  doc.text('Total Dispatched :', innerX + tCols[0] + tCols[1] + tCols[2] - 2, curY + 4.5, { align: 'right' });
   doc.text(String(slip?.totalQty || 0), innerX + tCols[0] + tCols[1] + tCols[2] + tCols[3] / 2, curY + 4.5, {
     align: 'center',
   });
@@ -428,7 +434,7 @@ export function generateLoadingSlipPDF(
   });
 
   // Copy 1: Original (Top half, shifted 12mm down from top edge)
-  drawSingleSlipCopy(doc, ticket, settings, 'ORIGINAL (OFFICE USE)', 12, storeInchargeFullName);
+  drawSingleSlipCopy(doc, ticket, settings, 'Original (Office Use)', 12, storeInchargeFullName);
 
   // Middle Scissor Cut Line
   const cutY = 149.5;
@@ -443,11 +449,11 @@ export function generateLoadingSlipPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(100, 100, 100);
-  doc.text('CUT HERE ALONG DOTTED LINE', 7, cutY + 1);
-  doc.text('A4 DUAL COPY SHEET', 203, cutY + 1, { align: 'right' });
+  doc.text('Cut Here Along Dotted Line', 7, cutY + 1);
+  doc.text('A4 Dual Copy Sheet', 203, cutY + 1, { align: 'right' });
 
   // Copy 2: Duplicate (Bottom half)
-  drawSingleSlipCopy(doc, ticket, settings, 'DUPLICATE (FOR FORKLIFT OPERATOR)', 155, storeInchargeFullName);
+  drawSingleSlipCopy(doc, ticket, settings, 'Duplicate (For Forklift Operator)', 155, storeInchargeFullName);
 
   const fileIdentifier = (ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber || ticket.ticketNumber).replace(
     /[^a-zA-Z0-9_-]/g,
@@ -466,10 +472,14 @@ export function generateGateTokenPDF(ticket: TicketRecord, settings: CompanySett
   const w = 80;
   let y = 7;
 
+  if (drawPdfLogo(doc, settings.logoDataUrl, w / 2 - 7, y - 2, 14, 10)) {
+    y += 10.5;
+  }
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
-  doc.text(truncateText(doc, settings.companyName.toUpperCase(), 72), w / 2, y, { align: 'center' });
+  doc.text(truncateText(doc, settings.companyName, 72), w / 2, y, { align: 'center' });
   y += 4;
 
   doc.setFont('helvetica', 'normal');
@@ -483,7 +493,7 @@ export function generateGateTokenPDF(ticket: TicketRecord, settings: CompanySett
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(255, 255, 255);
-  doc.text('GATE INWARD & LOADING TOKEN', w / 2, y + 3.8, { align: 'center' });
+  doc.text('Gate Inward & Loading Token', w / 2, y + 3.8, { align: 'center' });
   y += 8.5;
 
   // Assigned Gate Box
@@ -492,19 +502,19 @@ export function generateGateTokenPDF(ticket: TicketRecord, settings: CompanySett
   doc.rect(6, y, 68, 18, 'FD');
   doc.setFontSize(7);
   doc.setTextColor(75, 85, 99);
-  doc.text('ASSIGNED LOADING GATE', w / 2, y + 4.5, { align: 'center' });
+  doc.text('Assigned Loading Gate', w / 2, y + 4.5, { align: 'center' });
   doc.setFontSize(16);
   doc.setTextColor(30, 58, 138);
-  doc.text(ticket.gateNumber, w / 2, y + 11.5, { align: 'center' });
+  doc.text(String(ticket.gateNumber || ''), w / 2, y + 11.5, { align: 'center' });
   doc.setFontSize(7.5);
   doc.text(`Position at Gate: #${ticket.gateSequenceNumber}`, w / 2, y + 16, { align: 'center' });
   y += 22;
 
   const rows: Array<[string, string]> = [
-    ['Ticket Number:', ticket.ticketNumber],
+    ['Ticket Number:', String(ticket.ticketNumber || '')],
     ['Daily Overall Seq:', `#${ticket.sequenceNumber}`],
-    ['Truck Number:', ticket.truckNumber],
-    ['Driver Name:', ticket.driverName],
+    ['Truck Number:', String(ticket.truckNumber || '')],
+    ['Driver Name:', String(ticket.driverName || '')],
     ['Driver Mobile:', formatSaudiPhoneNumber(ticket.driverPhone)],
     ['Destination:', ticket.destinationPlace || 'N/A'],
     ['Date & Time In:', `${formatDisplayDate(ticket.date)} ${ticket.timeIn}`],
@@ -531,7 +541,7 @@ export function generateGateTokenPDF(ticket: TicketRecord, settings: CompanySett
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
-  doc.text(ticket.ticketNumber, w / 2, y, { align: 'center' });
+  doc.text(String(ticket.ticketNumber || ''), w / 2, y, { align: 'center' });
   y += 12;
 
   drawDashedLine(doc, 6, y, 74, y, 1.5, 1.2);

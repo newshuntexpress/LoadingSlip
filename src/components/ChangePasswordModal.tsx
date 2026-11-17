@@ -78,7 +78,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div data-preserve-case="true" className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl border border-neutral-200 w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-neutral-900 text-white px-6 py-4 flex items-center justify-between">
@@ -139,6 +139,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
               <Lock className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5 pointer-events-none" />
               <input
                 type={showPasswords ? 'text' : 'password'}
+                data-preserve-case="true"
                 autoComplete="current-password"
                 required
                 value={currentPassword}
@@ -161,6 +162,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             <label className="block text-xs font-bold text-neutral-700 mb-1">New Password</label>
             <input
               type={showPasswords ? 'text' : 'password'}
+              data-preserve-case="true"
               autoComplete="new-password"
               required
               value={newPassword}
@@ -174,6 +176,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
             <label className="block text-xs font-bold text-neutral-700 mb-1">Confirm New Password</label>
             <input
               type={showPasswords ? 'text' : 'password'}
+              data-preserve-case="true"
               autoComplete="new-password"
               required
               value={confirmPassword}

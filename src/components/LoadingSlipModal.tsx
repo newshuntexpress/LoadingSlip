@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TicketRecord, LoadingSlipData, LoadingSlipItem, CompanySettings } from '../types';
-import { createEmpty8Rows } from '../services/storage';
+import { createEmpty8Rows, getCurrentTimeString } from '../services/storage';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { FileText, Save, Printer, X, Calculator, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { FileText, Save, Printer, X, Trash2, AlertCircle } from 'lucide-react';
 
 export const PACK_DROPDOWN_OPTIONS = [
   'Can',
@@ -11,6 +11,7 @@ export const PACK_DROPDOWN_OPTIONS = [
   'EA',
   'KG',
   'Rolls',
+  'Pallet',
   'Box',
 ];
 
@@ -24,7 +25,7 @@ interface LoadingSlipModalProps {
 
 export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   ticket,
-  settings,
+  settings: _settings,
   storeInchargeFullName,
   onSave,
   onClose,
@@ -42,12 +43,13 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   const [driverName, setDriverName] = useState<string>(ticket.driverName);
   const [driverPhone, setDriverPhone] = useState<string>(() => formatSaudiPhoneNumber(ticket.driverPhone));
   const [truckNumber, setTruckNumber] = useState<string>(ticket.truckNumber);
-  const [transporterName, setTransporterName] = useState<string>(ticket.transporterName || '');
+  const transporterName = ticket.transporterName || '';
   // Prepared By / Dispatcher name should be BLANK by default
-  const [preparedBy, setPreparedBy] = useState<string>(existingSlip?.preparedBy || '');
+  const preparedBy = existingSlip?.preparedBy || '';
   // Forklift Operator / Loaded By name should be BLANK by default
   const [checkedBy, setCheckedBy] = useState<string>(existingSlip?.checkedBy || '');
-  const [markCompleteOnSave, setMarkCompleteOnSave] = useState<boolean>(ticket.status !== 'completed');
+  const [markCompleteOnSave, setMarkCompleteOnSave] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Initialize 8 rows
   const [items, setItems] = useState<LoadingSlipItem[]>(() => {
@@ -94,15 +96,16 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   const handleRowChange = (index: number, field: keyof LoadingSlipItem, value: string) => {
     setItems((prev) => {
       const updated = [...prev];
+      const nextVal = field === 'pack' && (value === '' || PACK_DROPDOWN_OPTIONS.includes(value)) ? value : value.toUpperCase();
       const currentRow = {
         ...updated[index],
-        [field]: value,
+        [field]: nextVal,
       };
 
       // Automatic Pallet & Loose Roll calculation when Quantity is entered:
       // Uses THIS row's own Auto-Pallet Ratio (defaults to 23 or rollsPerPallet)
       if (field === 'qty') {
-        const numQty = extractNumeric(value);
+        const numQty = extractNumeric(nextVal);
         const rowRatio = extractNumeric(currentRow.palletRatio) || rollsPerPallet || 23;
         if (numQty > 0 && rowRatio > 0) {
           const autoPallets = Math.floor(numQty / rowRatio);
@@ -113,7 +116,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
           if (!currentRow.pack) {
             currentRow.pack = 'Rolls';
           }
-        } else if (value.trim() === '') {
+        } else if (nextVal.trim() === '') {
           currentRow.pallets = '';
           currentRow.looseRolls = '';
         }
@@ -122,7 +125,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       // If the user modifies THIS row's specific Auto-Pallet Ratio (e.g. 1 Pallet = 23 rolls):
       // Immediately re-calculate Pallets & Loose Rolls for this row if Quantity exists
       if (field === 'palletRatio') {
-        const newRatio = extractNumeric(value);
+        const newRatio = extractNumeric(nextVal);
         const numQty = extractNumeric(currentRow.qty);
         if (numQty > 0 && newRatio > 0) {
           currentRow.pallets = String(Math.floor(numQty / newRatio));
@@ -173,10 +176,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
     );
   };
 
-  const handleQuickPackPreset = (index: number, packType: string) => {
-    handleRowChange(index, 'pack', packType);
-  };
-
   const handleClearRow = (index: number) => {
     setItems((prev) => {
       const updated = [...prev];
@@ -196,14 +195,23 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
 
   const buildSlipData = (): LoadingSlipData => {
     return {
-      delNoteNumber: delNoteNumber.trim(),
-      placeName: placeName.trim(),
-      items,
+      delNoteNumber: delNoteNumber.trim().toUpperCase(),
+      placeName: placeName.trim().toUpperCase(),
+      items: items.map((it) => ({
+        ...it,
+        description: (it.description || '').toUpperCase(),
+        pack: PACK_DROPDOWN_OPTIONS.includes(it.pack) ? it.pack : (it.pack || '').toUpperCase(),
+        qty: (it.qty || '').toUpperCase(),
+        pallets: (it.pallets || '').toUpperCase(),
+        looseRolls: (it.looseRolls || '').toUpperCase(),
+        palletRatio: it.palletRatio ? it.palletRatio.toUpperCase() : it.palletRatio,
+        remarks: (it.remarks || '').toUpperCase(),
+      })),
       totalQty,
       totalPallets,
       totalLooseRolls,
-      preparedBy: preparedBy.trim(),
-      checkedBy: checkedBy.trim(),
+      preparedBy: preparedBy.trim().toUpperCase(),
+      checkedBy: checkedBy.trim().toUpperCase(),
       storeInchargeName: displayStoreInchargeName,
       createdAt: existingSlip?.createdAt || new Date().toISOString().split('T')[0],
     };
@@ -217,28 +225,31 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       return;
     }
     if (!delNoteNumber.trim()) {
-      alert('Please enter Delivery Note / Challan Number!');
+      setValidationError('Please enter Delivery Note / Challan Number!');
       return;
     }
     if (!placeName.trim()) {
-      alert('Please enter Destination Place / Unloading Point!');
+      setValidationError('Please enter Destination Place / Unloading Point!');
       return;
     }
+    setValidationError(null);
 
     const updatedSlip = buildSlipData();
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
+    const nowTime = getCurrentTimeString();
+    const nextStatus = markCompleteOnSave ? 'completed' : 'under_loading';
     const updatedTicket: TicketRecord = {
       ...ticket,
       truckNumber: truckNumber.trim().toUpperCase(),
-      driverName: driverName.trim(),
+      driverName: driverName.trim().toUpperCase(),
       driverPhone: formattedPhone,
-      transporterName: transporterName.trim(),
-      destinationPlace: placeName.trim(),
+      transporterName: transporterName.trim().toUpperCase(),
+      destinationPlace: placeName.trim().toUpperCase(),
       loadingSlip: updatedSlip,
-      status: markCompleteOnSave ? 'completed' : ticket.status,
-      timeCompleted: markCompleteOnSave && !ticket.timeCompleted
-        ? new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        : ticket.timeCompleted,
+      status: nextStatus,
+      timeLoadingStarted: ticket.timeLoadingStarted || nowTime,
+      timeCompleted: markCompleteOnSave ? (ticket.timeCompleted || nowTime) : undefined,
+      manualStatusOverride: true,
     };
 
     onSave(updatedTicket, printDirectly);
@@ -609,19 +620,34 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
             </div>
           </div>
 
-          {/* Status Checkbox */}
-          {ticket.status !== 'completed' && (
-            <label className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
-              <input
-                type="checkbox"
-                checked={markCompleteOnSave}
-                onChange={(e) => setMarkCompleteOnSave(e.target.checked)}
-                className="w-4 h-4 text-emerald-600 rounded border-neutral-300 focus:ring-emerald-500"
-              />
-              <span className="text-xs text-neutral-800">
-                <span className="font-bold text-emerald-800">Mark as Completed:</span> Change vehicle status to 'Completed' upon saving and record timestamp.
-              </span>
-            </label>
+          {/* Status Info & Optional Completion Override */}
+          {!isSlipLocked && (
+            <div className="space-y-2">
+              {validationError && (
+                <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs font-semibold text-red-700">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{validationError}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                <span>
+                  Saving this loading slip will automatically set the ticket status to{' '}
+                  <strong className="font-extrabold">Under Loading</strong>.
+                </span>
+              </div>
+              <label className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={markCompleteOnSave}
+                  onChange={(e) => setMarkCompleteOnSave(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded border-neutral-300 focus:ring-emerald-500"
+                />
+                <span className="text-xs text-neutral-800">
+                  <span className="font-bold text-emerald-800">Mark as Completed (Optional):</span> Change vehicle status to 'Completed' upon saving instead of 'Under Loading'.
+                </span>
+              </label>
+            </div>
           )}
 
           {/* Footer Actions */}

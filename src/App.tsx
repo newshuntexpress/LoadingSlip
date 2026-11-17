@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TicketRecord, CompanySettings, TruckStatus, AuthUser, LoadingAlertNotification } from './types';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { TicketRecord, CompanySettings, PublicBranding, TruckStatus, AuthUser, LoadingAlertNotification } from './types';
 import {
   StorageService,
   getTodayDateString,
@@ -10,6 +10,8 @@ import { ApiClient, ApiError, setAuthErrorHandlers, setCsrfToken, setSessionToke
 import { GateQueueDashboard } from './components/GateQueueDashboard';
 import { TicketTable } from './components/TicketTable';
 import { ForkliftLoadingView } from './components/ForkliftLoadingView';
+import { LiquidMaterialStoreView } from './components/LiquidMaterialStoreView';
+import { ExFactoryView } from './components/ExFactoryView';
 import { NewTicketModal } from './components/NewTicketModal';
 import { LoadingSlipModal } from './components/LoadingSlipModal';
 import { LoadingSlipPrintView } from './components/LoadingSlipPrintView';
@@ -43,6 +45,8 @@ import {
   PackageCheck,
   CheckCircle2,
   Printer,
+  Droplets,
+  Truck,
 } from 'lucide-react';
 
 export default function App() {
@@ -58,7 +62,8 @@ export default function App() {
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState<LoadingAlertNotification[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(() => StorageService.getSettings());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'forklift'>('dashboard');
+  const [publicBranding, setPublicBranding] = useState<PublicBranding | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'forklift' | 'liquid' | 'exfactory'>('dashboard');
   const [appError, setAppError] = useState<string | null>(null);
 
   // Filters & Search
@@ -89,6 +94,8 @@ export default function App() {
 
   const isAdmin = currentUser?.roleName === 'admin';
   const isForkliftOperator = currentUser?.roleName === 'forklift_operator';
+  const isLiquidStoreRole = currentUser?.roleName === 'liquid_store_operator';
+  const isExFactoryRole = currentUser?.roleName === 'ex_factory_operator';
   const hasPerm = useCallback(
     (perm: string): boolean => {
       if (!currentUser) return false;
@@ -97,6 +104,77 @@ export default function App() {
     },
     [currentUser]
   );
+
+  const canViewTickets =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && (isAdmin || hasPerm('tickets.view'));
+  const canCreateTickets =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('tickets.create');
+  const canUpdateTickets =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('tickets.update');
+  const canOperateForklift =
+    !isLiquidStoreRole &&
+    !isExFactoryRole &&
+    (hasPerm('forklift.operate') || (!isForkliftOperator && hasPerm('tickets.update')));
+  const canAccessLiquidStore =
+    !isForkliftOperator && !isExFactoryRole && (isAdmin || hasPerm('liquid.store'));
+  const canViewExFactory =
+    !isForkliftOperator && !isLiquidStoreRole && (isAdmin || hasPerm('ex_factory.view'));
+  const canCreateExFactory =
+    !isForkliftOperator && !isLiquidStoreRole && (isAdmin || hasPerm('ex_factory.create'));
+  const canUpdateExFactory =
+    !isForkliftOperator && !isLiquidStoreRole && (isAdmin || hasPerm('ex_factory.update'));
+  const canDeleteExFactory =
+    !isForkliftOperator && !isLiquidStoreRole && (isAdmin || hasPerm('ex_factory.delete'));
+  const canAccessExFactory =
+    !isForkliftOperator &&
+    !isLiquidStoreRole &&
+    (isAdmin || canViewExFactory || canCreateExFactory || canUpdateExFactory || canDeleteExFactory);
+  const canDeleteTickets =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('tickets.delete');
+  const canPrintSlips =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('slips.print');
+  const canManageDrivers =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('drivers.manage');
+  const canViewReports =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('reports.view');
+  const canManageSettings =
+    !isForkliftOperator && !isLiquidStoreRole && !isExFactoryRole && hasPerm('settings.manage');
+
+  const isLiquidStoreOnly =
+    Boolean(currentUser) &&
+    !isAdmin &&
+    !isForkliftOperator &&
+    !isExFactoryRole &&
+    (isLiquidStoreRole ||
+      (canAccessLiquidStore &&
+        !canViewTickets &&
+        !canCreateTickets &&
+        !canUpdateTickets &&
+        !canOperateForklift &&
+        !canAccessExFactory &&
+        !canDeleteTickets &&
+        !canPrintSlips &&
+        !canManageDrivers &&
+        !canViewReports &&
+        !canManageSettings));
+
+  const isExFactoryOnly =
+    Boolean(currentUser) &&
+    !isAdmin &&
+    !isForkliftOperator &&
+    !isLiquidStoreRole &&
+    (isExFactoryRole ||
+      (canAccessExFactory &&
+        !canViewTickets &&
+        !canCreateTickets &&
+        !canUpdateTickets &&
+        !canOperateForklift &&
+        !canAccessLiquidStore &&
+        !canDeleteTickets &&
+        !canPrintSlips &&
+        !canManageDrivers &&
+        !canViewReports &&
+        !canManageSettings));
 
   // Clear all sensitive state immediately upon logout or unauthorized error
   const clearSessionState = useCallback(() => {
@@ -123,14 +201,32 @@ export default function App() {
   // Load shared application data from authenticated backend
   const loadData = useCallback(async () => {
     const forkliftOnly = currentUser?.roleName === 'forklift_operator';
+    const userIsAdmin = currentUser?.roleName === 'admin';
+    const userPerms = currentUser?.permissions || [];
+    const userCanViewTickets =
+      !forkliftOnly &&
+      currentUser?.roleName !== 'liquid_store_operator' &&
+      currentUser?.roleName !== 'ex_factory_operator' &&
+      (userIsAdmin || userPerms.includes('tickets.view'));
+    const userCanFetchTickets = forkliftOnly || userCanViewTickets;
+    const userCanFetchDrivers =
+      !forkliftOnly &&
+      currentUser?.roleName !== 'liquid_store_operator' &&
+      (userIsAdmin ||
+        userPerms.includes('drivers.manage') ||
+        userPerms.includes('tickets.view') ||
+        userPerms.includes('ex_factory.view') ||
+        userPerms.includes('ex_factory.create') ||
+        userPerms.includes('ex_factory.update'));
+
     try {
       const [ticketsRes, driversRes, settingsRes, alertsRes] = await Promise.all([
-        ApiClient.getTickets(),
-        forkliftOnly ? Promise.resolve([]) : ApiClient.getDrivers(),
+        userCanFetchTickets ? ApiClient.getTickets() : Promise.resolve([] as TicketRecord[]),
+        userCanFetchDrivers ? ApiClient.getDrivers() : Promise.resolve([]),
         ApiClient.getSettings(),
-        forkliftOnly
-          ? Promise.resolve([] as LoadingAlertNotification[])
-          : ApiClient.getLoadingAlerts().catch(() => [] as LoadingAlertNotification[]),
+        !forkliftOnly && userCanViewTickets
+          ? ApiClient.getLoadingAlerts().catch(() => [] as LoadingAlertNotification[])
+          : Promise.resolve([] as LoadingAlertNotification[]),
       ]);
       StorageService.hydrateFromServer({
         tickets: ticketsRes,
@@ -150,7 +246,7 @@ export default function App() {
       }
       setAppError(err?.message || 'Unable to synchronize records from server.');
     }
-  }, [currentUser?.roleName]);
+  }, [currentUser?.roleName, currentUser?.permissions]);
 
   // Register global API auth interceptors
   useEffect(() => {
@@ -173,10 +269,30 @@ export default function App() {
         const status = await ApiClient.getAuthStatus();
         if (!active) return;
         setNeedsSetup(status.needsSetup);
+        if (status.branding) {
+          setPublicBranding(status.branding);
+        }
         if (status.authenticated && status.user) {
           setCurrentUser(status.user);
-          if (status.user.roleName === 'forklift_operator') {
+          const u = status.user;
+          if (u.roleName === 'forklift_operator') {
             setActiveTab('forklift');
+          } else if (
+            u.roleName === 'liquid_store_operator' ||
+            (u.roleName !== 'admin' &&
+              u.permissions.includes('liquid.store') &&
+              !u.permissions.includes('tickets.view') &&
+              !u.permissions.some((p) => p.startsWith('ex_factory.')))
+          ) {
+            setActiveTab('liquid');
+          } else if (
+            u.roleName === 'ex_factory_operator' ||
+            (u.roleName !== 'admin' &&
+              u.permissions.some((p) => p.startsWith('ex_factory.')) &&
+              !u.permissions.includes('tickets.view') &&
+              !u.permissions.includes('liquid.store'))
+          ) {
+            setActiveTab('exfactory');
           }
         } else {
           setCurrentUser(null);
@@ -192,10 +308,10 @@ export default function App() {
     };
   }, []);
 
-  // Redirect & lock Forklift Operators strictly inside the Forklift Operator Section
+  // Redirect & lock Forklift Operators, Liquid-Store-Only, or Ex-Factory-Only users strictly inside their section
   useEffect(() => {
     if (!currentUser || currentUser.mustChangePassword) return;
-    if (currentUser.roleName === 'forklift_operator') {
+    if (isForkliftOperator) {
       setActiveTab('forklift');
       setSelectedDate(getTodayDateString());
       setShowNewTicketModal(false);
@@ -210,8 +326,64 @@ export default function App() {
       if (window.location.pathname !== '/' || window.location.hash !== '#forklift') {
         window.history.replaceState(null, '', '/#forklift');
       }
+      return;
     }
-  }, [currentUser]);
+
+    if (isLiquidStoreOnly) {
+      setActiveTab('liquid');
+      setShowNewTicketModal(false);
+      setActiveTicketForSlip(null);
+      setActiveTicketForPrintSlip(null);
+      setActiveTicketForPrintTicket(null);
+      setActiveTicketForWhatsApp(null);
+      setShowDriverMasterModal(false);
+      setShowDailyReportModal(false);
+      setShowSettingsModal(false);
+      setShowAdminModal(false);
+      if (window.location.pathname !== '/' || window.location.hash !== '#liquid-store') {
+        window.history.replaceState(null, '', '/#liquid-store');
+      }
+      return;
+    }
+
+    if (isExFactoryOnly) {
+      setActiveTab('exfactory');
+      setShowNewTicketModal(false);
+      setActiveTicketForSlip(null);
+      setActiveTicketForPrintSlip(null);
+      setActiveTicketForPrintTicket(null);
+      setActiveTicketForWhatsApp(null);
+      setShowDriverMasterModal(false);
+      setShowDailyReportModal(false);
+      setShowSettingsModal(false);
+      setShowAdminModal(false);
+      if (window.location.pathname !== '/' || window.location.hash !== '#ex-factory') {
+        window.history.replaceState(null, '', '/#ex-factory');
+      }
+      return;
+    }
+
+    // If custom user profile lacks tickets.view, redirect off dashboard/list onto their permitted tab
+    if (!canViewTickets && (activeTab === 'dashboard' || activeTab === 'list')) {
+      if (canAccessExFactory) {
+        setActiveTab('exfactory');
+      } else if (canAccessLiquidStore) {
+        setActiveTab('liquid');
+      } else if (canOperateForklift) {
+        setActiveTab('forklift');
+      }
+    }
+  }, [
+    currentUser,
+    isForkliftOperator,
+    isLiquidStoreOnly,
+    isExFactoryOnly,
+    canViewTickets,
+    canAccessExFactory,
+    canAccessLiquidStore,
+    canOperateForklift,
+    activeTab,
+  ]);
 
   // Hydrate server data once authenticated and password-compliant, + 15s multi-user live polling
   useEffect(() => {
@@ -219,7 +391,12 @@ export default function App() {
 
     let cancelled = false;
     (async () => {
-      if (!migratedOnceRef.current && currentUser.roleName !== 'forklift_operator') {
+      if (
+        !migratedOnceRef.current &&
+        currentUser.roleName !== 'forklift_operator' &&
+        !isLiquidStoreOnly &&
+        !isExFactoryOnly
+      ) {
         migratedOnceRef.current = true;
         await ApiClient.migrateLegacyLocalStorageIfNeeded();
       }
@@ -244,7 +421,7 @@ export default function App() {
       clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [currentUser, loadData]);
+  }, [currentUser, isLiquidStoreOnly, isExFactoryOnly, loadData]);
 
   // Auto-dismiss undo toast after 6 seconds
   useEffect(() => {
@@ -255,6 +432,19 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [deletedToast]);
+
+  // Keep browser tab favicon & branding synchronized with uploaded company logo
+  useEffect(() => {
+    const activeLogo = (currentUser ? settings.logoDataUrl : publicBranding?.logoDataUrl) || settings.logoDataUrl || publicBranding?.logoDataUrl;
+    if (!activeLogo) return;
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = activeLogo;
+  }, [currentUser, settings.logoDataUrl, publicBranding?.logoDataUrl]);
 
   const handleLogout = async () => {
     await ApiClient.logout();
@@ -280,11 +470,42 @@ export default function App() {
     return (
       <LoginView
         needsSetup={needsSetup}
+        branding={publicBranding}
         onAuthenticated={(user) => {
           setNeedsSetup(false);
           setAppError(null);
           setCurrentUser(user);
-          setActiveTab(user.roleName === 'forklift_operator' ? 'forklift' : 'dashboard');
+          if (user.roleName === 'forklift_operator') {
+            setActiveTab('forklift');
+          } else if (
+            user.roleName === 'liquid_store_operator' ||
+            (user.roleName !== 'admin' &&
+              user.permissions.includes('liquid.store') &&
+              !user.permissions.includes('tickets.view') &&
+              !user.permissions.some((p) => p.startsWith('ex_factory.')))
+          ) {
+            setActiveTab('liquid');
+          } else if (
+            user.roleName === 'ex_factory_operator' ||
+            (user.roleName !== 'admin' &&
+              user.permissions.some((p) => p.startsWith('ex_factory.')) &&
+              !user.permissions.includes('tickets.view') &&
+              !user.permissions.includes('liquid.store'))
+          ) {
+            setActiveTab('exfactory');
+          } else if (user.roleName !== 'admin' && !user.permissions.includes('tickets.view')) {
+            if (user.permissions.some((p) => p.startsWith('ex_factory.'))) {
+              setActiveTab('exfactory');
+            } else if (user.permissions.includes('liquid.store')) {
+              setActiveTab('liquid');
+            } else if (user.permissions.includes('forklift.operate')) {
+              setActiveTab('forklift');
+            } else {
+              setActiveTab('dashboard');
+            }
+          } else {
+            setActiveTab('dashboard');
+          }
         }}
       />
     );
@@ -299,7 +520,37 @@ export default function App() {
           forced
           onSuccess={(updatedUser) => {
             setCurrentUser(updatedUser);
-            setActiveTab(updatedUser.roleName === 'forklift_operator' ? 'forklift' : 'dashboard');
+            if (updatedUser.roleName === 'forklift_operator') {
+              setActiveTab('forklift');
+            } else if (
+              updatedUser.roleName === 'liquid_store_operator' ||
+              (updatedUser.roleName !== 'admin' &&
+                updatedUser.permissions.includes('liquid.store') &&
+                !updatedUser.permissions.includes('tickets.view') &&
+                !updatedUser.permissions.some((p) => p.startsWith('ex_factory.')))
+            ) {
+              setActiveTab('liquid');
+            } else if (
+              updatedUser.roleName === 'ex_factory_operator' ||
+              (updatedUser.roleName !== 'admin' &&
+                updatedUser.permissions.some((p) => p.startsWith('ex_factory.')) &&
+                !updatedUser.permissions.includes('tickets.view') &&
+                !updatedUser.permissions.includes('liquid.store'))
+            ) {
+              setActiveTab('exfactory');
+            } else if (updatedUser.roleName !== 'admin' && !updatedUser.permissions.includes('tickets.view')) {
+              if (updatedUser.permissions.some((p) => p.startsWith('ex_factory.'))) {
+                setActiveTab('exfactory');
+              } else if (updatedUser.permissions.includes('liquid.store')) {
+                setActiveTab('liquid');
+              } else if (updatedUser.permissions.includes('forklift.operate')) {
+                setActiveTab('forklift');
+              } else {
+                setActiveTab('dashboard');
+              }
+            } else {
+              setActiveTab('dashboard');
+            }
           }}
           onLogout={handleLogout}
         />
@@ -458,15 +709,6 @@ export default function App() {
     }
   };
 
-  const canCreateTickets = !isForkliftOperator && hasPerm('tickets.create');
-  const canUpdateTickets = !isForkliftOperator && hasPerm('tickets.update');
-  const canOperateForklift = hasPerm('forklift.operate') || (!isForkliftOperator && hasPerm('tickets.update'));
-  const canDeleteTickets = !isForkliftOperator && hasPerm('tickets.delete');
-  const canPrintSlips = !isForkliftOperator && hasPerm('slips.print');
-  const canManageDrivers = !isForkliftOperator && hasPerm('drivers.manage');
-  const canViewReports = !isForkliftOperator && hasPerm('reports.view');
-  const canManageSettings = !isForkliftOperator && hasPerm('settings.manage');
-
   const pendingForkliftCount = dayTickets.filter(
     (t) => t.status !== 'completed' && t.status !== 'cancelled' && !t.loadingSlip?.isLocked
   ).length;
@@ -481,63 +723,84 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100 text-neutral-900 font-sans flex flex-col">
-      {/* Top Banner Navigation Header */}
-      <header className="bg-neutral-900 text-white shadow-xl sticky top-0 z-40 border-b border-neutral-800">
+    <div className="min-h-screen bg-[#F3F6FA] text-[#1C2833] font-sans flex flex-col">
+      {/* Top Banner Navigation Header - SAP Fiori Shell Bar */}
+      <header className="bg-[#354A5F] text-white shadow-md sticky top-0 z-40 border-b border-[#223242]">
+        <div className="h-1 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#0070F2]" />
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 space-y-2.5">
-          {/* Upper Row: Company Brand Left + Account Badge, Admin Users, Password & Logout Right */}
+          {/* Upper Row: Centered Company Brand + Centered Account Badge, Admin Users, Password & Logout */}
           <div
-            className={`flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 ${
-              !isForkliftOperator ? 'pb-2.5 border-b border-neutral-800/90' : ''
+            className={`flex flex-col items-center justify-center text-center gap-2.5 ${
+              !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly ? 'pb-2.5 border-b border-white/15' : ''
             }`}
           >
             {/* Logo & Company Title */}
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
-                <Building2 className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-sm sm:text-base font-black tracking-wide uppercase text-white truncate">
+            <div className="flex items-center justify-center gap-3 min-w-0 max-w-full">
+              {settings.logoDataUrl ? (
+                <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shadow-md shrink-0 ring-1 ring-[#F0AB00]/70 overflow-hidden p-0.5">
+                  <img
+                    src={settings.logoDataUrl}
+                    alt={settings.companyName}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#0A6ED1] to-[#004A99] flex items-center justify-center text-[#F0AB00] shadow-md shrink-0 ring-1 ring-[#F0AB00]/60">
+                  <Building2 className="w-5 h-5" />
+                </div>
+              )}
+              <div className="min-w-0 text-left sm:text-center">
+                <div className="flex items-center justify-start sm:justify-center gap-2 flex-wrap">
+                  <h1 className="text-sm sm:text-base font-black tracking-wide text-white truncate">
                     {settings.companyName}
                   </h1>
                   <span
                     className={`hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${
                       isForkliftOperator
-                        ? 'bg-emerald-900/80 text-emerald-300 border-emerald-700'
-                        : 'bg-blue-900/80 text-blue-300 border-blue-700'
+                        ? 'bg-[#1D3E35] text-[#68D391] border-[#2E6B5A]'
+                        : isLiquidStoreOnly
+                        ? 'bg-[#1E3B58] text-[#8AC4FF] border-[#356697]'
+                        : isExFactoryOnly
+                        ? 'bg-[#422D12] text-[#FCD34D] border-[#854D0E]'
+                        : 'bg-[#243647] text-[#F0AB00] border-[#4A6580]'
                     }`}
                   >
-                    {isForkliftOperator ? 'Forklift Operator Section' : 'Gate Queue & Dispatch'}
+                    {isForkliftOperator
+                      ? 'Forklift Operator Section'
+                      : isLiquidStoreOnly
+                      ? 'Liquid Material Camp Store'
+                      : isExFactoryOnly
+                      ? 'Ex-Factory Dispatch'
+                      : 'Gate Queue & Dispatch'}
                   </span>
                 </div>
-                <p className="text-[11px] text-neutral-400 truncate max-w-xs sm:max-w-md">
+                <p className="text-[11px] text-[#CBD8E6] truncate max-w-xs sm:max-w-xl mx-auto">
                   {settings.companySubtitle}
                 </p>
               </div>
             </div>
 
-            {/* Upper-Right Account Info & Uniform Auth Action Buttons */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto lg:justify-end">
-              <div className="flex items-center gap-2 bg-neutral-800/90 border border-neutral-700 rounded-xl h-9 px-3 shrink-0">
-                <UserIcon className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            {/* Centered Account Info & Uniform Auth Action Buttons */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 w-full">
+              <div className="flex items-center justify-center gap-2 bg-[#243647] border border-[#4A6580] rounded-lg h-9 px-3 shrink-0 w-full sm:w-auto">
+                <UserIcon className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
                 <span className="text-xs font-bold text-white truncate max-w-[140px]">
                   {currentUser.fullName}
                 </span>
-                <span className="text-[11px] text-neutral-400 whitespace-nowrap">
-                  @{currentUser.username} • {currentUser.roleDisplayName}
+                <span className="text-[11px] text-[#B8CAE0] whitespace-nowrap">
+                  @{currentUser.username} · {currentUser.roleDisplayName}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
                 {isAdmin && (
                   <button
                     type="button"
                     onClick={() => setShowAdminModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-indigo-900/85 hover:bg-indigo-800 text-indigo-100 border border-indigo-600/80 shadow-sm"
+                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#0A6ED1] hover:bg-[#085CAF] text-white border border-[#3B93EE] shadow-sm"
                     title="Admin Dashboard: Users, Permissions, Sessions & Audit Log"
                   >
-                    <Shield className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                    <Shield className="w-3.5 h-3.5 text-white shrink-0" />
                     <span>Admin Users</span>
                   </button>
                 )}
@@ -545,17 +808,17 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowChangePasswordModal(true)}
-                  className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 shadow-sm"
+                  className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
                   title="Change My Password"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <KeyRound className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
                   <span>Password</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[110px] bg-red-900/70 hover:bg-red-700 text-red-100 border border-red-800/80 shadow-sm ${
+                  className={`app-btn w-full sm:w-auto sm:min-w-[110px] bg-[#BB0000] hover:bg-[#9E0000] text-white border border-[#E04F4F] shadow-sm ${
                     isAdmin ? 'col-span-2 sm:col-span-1' : ''
                   }`}
                   title="Sign Out Securely"
@@ -567,14 +830,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* Lower Toolbar Row: Date Picker & Uniform Autofit Action Buttons (Hidden for Forklift Operators) */}
-          {!isForkliftOperator && (
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          {/* Lower Toolbar Row: Centered Date Picker & Uniform Autofit Action Buttons (Hidden for Restricted Single-Section Roles) */}
+          {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && (
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2">
               {/* Date Switcher (Exact h-9 match) */}
-              <div className="relative inline-flex items-center justify-between md:justify-start h-9 bg-neutral-800 hover:bg-neutral-750 rounded-xl border border-neutral-700 px-3 gap-2 w-full md:w-auto shrink-0">
+              <div className="relative inline-flex items-center justify-between sm:justify-center h-9 bg-[#2B3E50] hover:bg-[#3A526A] rounded-lg border border-[#4A6580] px-3 gap-2 w-full sm:w-auto shrink-0 transition">
                 <div className="flex items-center gap-2 pointer-events-none">
-                  <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="text-xs font-black tracking-wide text-white whitespace-nowrap select-none">
+                  <Calendar className="w-4 h-4 text-[#F0AB00] shrink-0" />
+                  <span className="text-xs font-black tracking-wide text-white whitespace-nowrap select-none font-mono">
                     {formatDisplayDate(selectedDate)}
                   </span>
                 </div>
@@ -598,7 +861,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setSelectedDate(getTodayDateString())}
-                    className="relative z-10 h-6 px-2 text-[10px] bg-blue-600 hover:bg-blue-500 text-white rounded-md font-bold cursor-pointer transition whitespace-nowrap"
+                    className="relative z-10 h-6 px-2 text-[10px] bg-[#0A6ED1] hover:bg-[#085CAF] text-white rounded font-bold cursor-pointer transition whitespace-nowrap"
                     title="Switch to Today"
                   >
                     Today
@@ -607,27 +870,29 @@ export default function App() {
               </div>
 
               {/* Responsive Autofit Utility & Primary CTA Buttons */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-end gap-2 w-full md:w-auto">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
                 {/* Driver Master */}
-                <button
-                  type="button"
-                  onClick={() => setShowDriverMasterModal(true)}
-                  className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 shadow-sm"
-                  title="Driver & Vehicle Master Directory"
-                >
-                  <Users className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Driver Master</span>
-                </button>
+                {canManageDrivers && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDriverMasterModal(true)}
+                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
+                    title="Driver & Vehicle Master Directory"
+                  >
+                    <Users className="w-4 h-4 text-[#F0AB00] shrink-0" />
+                    <span>Driver Master</span>
+                  </button>
+                )}
 
                 {/* Daily Report */}
                 {canViewReports && (
                   <button
                     type="button"
                     onClick={() => setShowDailyReportModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 shadow-sm"
+                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#24A159] shadow-sm"
                     title="Daily Reports & Data Backup"
                   >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <FileSpreadsheet className="w-4 h-4 text-white shrink-0" />
                     <span>Daily Report</span>
                   </button>
                 )}
@@ -637,20 +902,20 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowSettingsModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 shadow-sm"
+                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
                     title="Plant Settings & Gates"
                   >
-                    <Settings className="w-4 h-4 text-blue-300 shrink-0" />
+                    <Settings className="w-4 h-4 text-[#68AEFF] shrink-0" />
                     <span>Settings</span>
                   </button>
                 )}
 
-                {/* New Ticket Button - Primary CTA */}
+                {/* New Ticket Button - Primary SAP Gold Emphasized CTA */}
                 {canCreateTickets && (
                   <button
                     type="button"
                     onClick={() => setShowNewTicketModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[148px] col-span-2 sm:col-span-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30"
+                    className="app-btn w-full sm:w-auto sm:min-w-[148px] col-span-2 sm:col-span-1 bg-[#F0AB00] hover:bg-[#FFC11E] text-[#1C2833] font-black shadow-md border border-[#FFD154]"
                   >
                     <Plus className="w-4 h-4 shrink-0" />
                     <span>New Gate Ticket</span>
@@ -667,24 +932,24 @@ export default function App() {
         {appError && (
           <div
             role="alert"
-            className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shadow-sm"
+            className="bg-[#FFF0F0] border border-[#F4B8B8] text-[#BB0000] px-4 py-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 shadow-xs"
           >
             <span className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-[#BB0000] shrink-0" />
               <span>{appError}</span>
             </span>
             <button
               type="button"
               onClick={() => setAppError(null)}
-              className="p-1 text-red-600 hover:text-red-900 cursor-pointer"
+              className="p-1 text-[#BB0000] hover:text-red-950 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
 
-        {/* Loading Completed Alerts Banner (Main Dashboard Notifications - Hidden for Forklift Operators) */}
-        {!isForkliftOperator && loadingAlerts.length > 0 && (
+        {/* Loading Completed Alerts Banner (Hidden for Restricted Single-Section Users) */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewTickets && loadingAlerts.length > 0 && (
           <div className="space-y-2">
             {loadingAlerts.slice(0, 3).map((alert) => {
               const matchedTicket = tickets.find((t) => t.id === alert.ticketId);
@@ -692,17 +957,17 @@ export default function App() {
                 <div
                   key={alert.id}
                   role="status"
-                  className="bg-emerald-50 border-2 border-emerald-400 text-emerald-950 px-4 py-3 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className="bg-[#F1FDF6] border border-[#72C896] text-[#0D4A26] px-4 py-3 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0 mt-0.5">
+                    <div className="p-2 bg-[#107E3E] text-white rounded-lg shrink-0 mt-0.5">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div className="text-xs space-y-0.5 min-w-0">
-                      <p className="font-black text-sm text-emerald-900 uppercase tracking-wide">
+                      <p className="font-black text-sm text-[#0D4A26] tracking-wide">
                         Loading Completed
                       </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-emerald-900">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#10572D]">
                         <span>
                           <strong>Delivery Number:</strong> {alert.delNoteNumber}
                         </span>
@@ -727,7 +992,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setActiveTicketForPrintSlip(matchedTicket)}
-                        className="app-btn-sm bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300"
+                        className="app-btn-sm bg-white hover:bg-[#E4F7EB] text-[#107E3E] border border-[#ABE2C2]"
                       >
                         <Printer className="w-3.5 h-3.5 shrink-0" />
                         <span>Print Slip</span>
@@ -736,7 +1001,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleDismissAlert(alert.id)}
-                      className="app-btn-sm bg-emerald-700 hover:bg-emerald-800 text-white"
+                      className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white"
                       title="Acknowledge and dismiss alert"
                     >
                       <X className="w-3.5 h-3.5 shrink-0" />
@@ -749,65 +1014,119 @@ export default function App() {
           </div>
         )}
 
-        {/* Navigation Tabs and Search / Filter Bar (Hidden for Forklift Operators) */}
-        {!isForkliftOperator && (
-          <div className="bg-white p-3 rounded-2xl border border-neutral-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Navigation Tabs and Search / Filter Bar (Hidden for Restricted Single-Section Users) */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && (
+          <div className="bg-white p-3 rounded-xl border border-[#D1DBE5] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             {/* Tabs */}
-            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center bg-neutral-100 p-1 rounded-xl gap-1 w-full lg:w-auto">
-              <button
-                type="button"
-                onClick={() => setActiveTab('dashboard')}
-                className={`app-btn w-full sm:w-auto sm:min-w-[140px] !rounded-lg ${
-                  activeTab === 'dashboard'
-                    ? 'bg-white text-blue-900 shadow-sm'
-                    : 'text-neutral-600 hover:text-neutral-900'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4 text-blue-700 shrink-0" />
-                <span>Live Monitor</span>
-              </button>
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center bg-[#EFF4F9] p-1 rounded-lg gap-1 w-full lg:w-auto border border-[#D1DBE5]">
+              {canViewTickets && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`app-btn w-full sm:w-auto sm:min-w-[140px] !rounded-md ${
+                    activeTab === 'dashboard'
+                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900'
+                      : 'text-[#354A5F] hover:text-red-900 hover:bg-red-50/70'
+                  }`}
+                >
+                  <LayoutDashboard
+                    className={`w-4 h-4 shrink-0 ${
+                      activeTab === 'dashboard' ? 'text-white' : 'text-[#0A6ED1]'
+                    }`}
+                  />
+                  <span>Live Monitor</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('list')}
-                className={`app-btn w-full sm:w-auto sm:min-w-[160px] !rounded-lg ${
-                  activeTab === 'list'
-                    ? 'bg-white text-blue-900 shadow-sm'
-                    : 'text-neutral-600 hover:text-neutral-900'
-                }`}
-              >
-                <TableIcon className="w-4 h-4 text-indigo-700 shrink-0" />
-                <span>All Tickets Ledger ({dayTickets.length})</span>
-              </button>
+              {canViewTickets && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('list')}
+                  className={`app-btn w-full sm:w-auto sm:min-w-[160px] !rounded-md ${
+                    activeTab === 'list'
+                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900'
+                      : 'text-[#354A5F] hover:text-red-900 hover:bg-red-50/70'
+                  }`}
+                >
+                  <TableIcon
+                    className={`w-4 h-4 shrink-0 ${
+                      activeTab === 'list' ? 'text-white' : 'text-[#354A5F]'
+                    }`}
+                  />
+                  <span>All Tickets Ledger ({dayTickets.length})</span>
+                </button>
+              )}
 
               {canOperateForklift && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('forklift')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[172px] !rounded-lg ${
+                  className={`app-btn w-full sm:w-auto sm:min-w-[172px] !rounded-md ${
                     activeTab === 'forklift'
-                      ? 'bg-white text-emerald-900 shadow-sm'
-                      : 'text-neutral-600 hover:text-neutral-900'
+                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900'
+                      : 'text-[#354A5F] hover:text-red-900 hover:bg-red-50/70'
                   }`}
                 >
-                  <PackageCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <PackageCheck
+                    className={`w-4 h-4 shrink-0 ${
+                      activeTab === 'forklift' ? 'text-white' : 'text-[#107E3E]'
+                    }`}
+                  />
                   <span>Forklift Loading ({pendingForkliftCount})</span>
+                </button>
+              )}
+
+              {canAccessLiquidStore && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('liquid')}
+                  className={`app-btn w-full sm:w-auto sm:min-w-[196px] !rounded-md ${
+                    activeTab === 'liquid'
+                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900'
+                      : 'text-[#354A5F] hover:text-red-900 hover:bg-red-50/70'
+                  }`}
+                >
+                  <Droplets
+                    className={`w-4 h-4 shrink-0 ${
+                      activeTab === 'liquid' ? 'text-white' : 'text-[#0070F2]'
+                    }`}
+                  />
+                  <span>Liquid Material Camp Store</span>
+                </button>
+              )}
+
+              {canAccessExFactory && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('exfactory')}
+                  className={`app-btn w-full sm:w-auto sm:min-w-[140px] !rounded-md ${
+                    activeTab === 'exfactory'
+                      ? 'bg-red-800 text-white shadow-sm ring-1 ring-red-900'
+                      : 'text-[#354A5F] hover:text-red-900 hover:bg-red-50/70'
+                  }`}
+                >
+                  <Truck
+                    className={`w-4 h-4 shrink-0 ${
+                      activeTab === 'exfactory' ? 'text-white' : 'text-[#E9730C]'
+                    }`}
+                  />
+                  <span>Ex-Factory</span>
                 </button>
               )}
             </div>
 
             {/* Search & Filters (for Monitor & Ledger tabs) */}
-            {activeTab !== 'forklift' && (
+            {activeTab !== 'forklift' && activeTab !== 'liquid' && activeTab !== 'exfactory' && (
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                 {/* Search */}
                 <div className="relative flex-1 sm:w-60">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400 pointer-events-none" />
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#5B738B] pointer-events-none" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search truck, driver, ticket..."
-                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-neutral-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-neutral-50"
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-[#BCC8D4] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] focus:border-[#0A6ED1] bg-[#F7F9FB] text-[#1C2833]"
                   />
                 </div>
 
@@ -815,7 +1134,7 @@ export default function App() {
                 <select
                   value={gateFilter}
                   onChange={(e) => setGateFilter(e.target.value)}
-                  className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-neutral-300 bg-neutral-50 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#BCC8D4] bg-[#F7F9FB] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
                 >
                   <option value="ALL">All Gates</option>
                   {settings.gates.map((g) => (
@@ -829,7 +1148,7 @@ export default function App() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-neutral-300 bg-neutral-50 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#BCC8D4] bg-[#F7F9FB] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
                 >
                   <option value="ALL">All Status</option>
                   <option value="waiting">Waiting in Queue</option>
@@ -842,8 +1161,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 1: Live Gate Queue Dashboard (Hidden for Forklift Operators) */}
-        {!isForkliftOperator && activeTab === 'dashboard' && (
+        {/* Tab 1: Live Gate Queue Dashboard */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewTickets && activeTab === 'dashboard' && (
           <GateQueueDashboard
             tickets={filteredTickets}
             settings={settings}
@@ -858,8 +1177,8 @@ export default function App() {
           />
         )}
 
-        {/* Tab 2: All Records Table (Hidden for Forklift Operators) */}
-        {!isForkliftOperator && activeTab === 'list' && (
+        {/* Tab 2: All Records Table */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewTickets && activeTab === 'list' && (
           <TicketTable
             tickets={filteredTickets}
             onOpenLoadingSlip={(t) => setActiveTicketForSlip(t)}
@@ -875,7 +1194,7 @@ export default function App() {
         )}
 
         {/* Tab 3: Forklift Operator Loading (Dedicated View for Forklift Operator Role) */}
-        {(isForkliftOperator || (activeTab === 'forklift' && canOperateForklift)) &&
+        {(isForkliftOperator || (!isLiquidStoreOnly && !isExFactoryOnly && activeTab === 'forklift' && canOperateForklift)) &&
           (canOperateForklift && hasPerm('tickets.view') ? (
             <ForkliftLoadingView
               tickets={dayTickets}
@@ -899,23 +1218,69 @@ export default function App() {
               </p>
             </div>
           ))}
+
+        {/* Tab 4: Liquid Material Camp Store (Exclusive Section when Liquid-Store-Only, or Tab when Multi-Access) */}
+        {!isForkliftOperator && !isExFactoryOnly && (isLiquidStoreOnly || activeTab === 'liquid') &&
+          (canAccessLiquidStore ? (
+            <LiquidMaterialStoreView
+              currentUser={currentUser}
+              companyLogoUrl={settings.logoDataUrl}
+            />
+          ) : (
+            <div className="bg-white border border-amber-200 rounded-2xl p-8 text-center space-y-2 shadow-sm">
+              <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+              <h3 className="text-sm font-black text-neutral-900">Liquid Store Permissions Required</h3>
+              <p className="text-xs text-neutral-600">
+                Your Liquid Store Operator account does not currently have active store permissions. Please contact your Administrator.
+              </p>
+            </div>
+          ))}
+
+        {/* Tab 5: Ex-Factory Dispatch Section (Exclusive Section when Ex-Factory-Only, or Tab when Multi-Access) */}
+        {!isForkliftOperator && !isLiquidStoreOnly && (isExFactoryOnly || activeTab === 'exfactory') &&
+          (canViewExFactory ? (
+            <ExFactoryView
+              currentUser={currentUser}
+              drivers={StorageService.getDrivers()}
+              facilityName={settings.companyName}
+              companyLogoUrl={settings.logoDataUrl}
+              canCreate={canCreateExFactory}
+              canUpdate={canUpdateExFactory}
+              canDelete={canDeleteExFactory}
+            />
+          ) : (
+            <div className="bg-white border border-amber-200 rounded-2xl p-8 text-center space-y-2 shadow-sm">
+              <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
+              <h3 className="text-sm font-black text-neutral-900">Ex-Factory Permissions Required</h3>
+              <p className="text-xs text-neutral-600">
+                Your account does not currently have permission to view the Ex-Factory Dispatch section. Please contact your Administrator.
+              </p>
+            </div>
+          ))}
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-neutral-200 py-3 text-center text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p>
-            {settings.companyName} • Material Loading Gate Queue & 2-Copy A4 Loading Slip Manager
+            {settings.companyName} •{' '}
+            {isLiquidStoreOnly
+              ? 'Liquid Material Camp Store'
+              : isExFactoryOnly
+              ? 'Ex-Factory Dispatch'
+              : 'Material Loading Gate Queue & 2-Copy A4 Loading Slip Manager'}
           </p>
           <p className="text-[11px] text-neutral-400">
-            Date: {formatDisplayDate(selectedDate)} | Total Entries: {dayTickets.length} | Operator: {currentUser.fullName} ({currentUser.roleDisplayName})
+            {isLiquidStoreOnly || isExFactoryOnly
+              ? `Operator: ${currentUser.fullName} (${currentUser.roleDisplayName})`
+              : `Date: ${formatDisplayDate(selectedDate)} | Total Entries: ${dayTickets.length} | Operator: ${currentUser.fullName} (${currentUser.roleDisplayName})`}
           </p>
         </div>
       </footer>
 
-      {/* MODALS (Restricted modals hidden for Forklift Operators) */}
+      {/* MODALS (Restricted modals hidden for Forklift Operators, Liquid-Store-Only & Ex-Factory-Only Users) */}
       {/* 1. New Ticket Modal */}
-      {!isForkliftOperator && showNewTicketModal && canCreateTickets && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showNewTicketModal && canCreateTickets && (
         <NewTicketModal
           date={selectedDate}
           settings={settings}
@@ -925,7 +1290,7 @@ export default function App() {
       )}
 
       {/* 2. Loading Slip 8-Rows Modal */}
-      {!isForkliftOperator && activeTicketForSlip && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && activeTicketForSlip && (
         <LoadingSlipModal
           ticket={activeTicketForSlip}
           settings={settings}
@@ -936,7 +1301,7 @@ export default function App() {
       )}
 
       {/* 3. 2-Copy A4 Loading Slip Print Preview Modal */}
-      {!isForkliftOperator && activeTicketForPrintSlip && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && activeTicketForPrintSlip && (
         <LoadingSlipPrintView
           ticket={activeTicketForPrintSlip}
           settings={settings}
@@ -946,7 +1311,7 @@ export default function App() {
       )}
 
       {/* 4. Compact Gate Token Print View */}
-      {!isForkliftOperator && activeTicketForPrintTicket && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && activeTicketForPrintTicket && (
         <TicketPrintView
           ticket={activeTicketForPrintTicket}
           settings={settings}
@@ -955,7 +1320,7 @@ export default function App() {
       )}
 
       {/* 5. WhatsApp Message Modal */}
-      {!isForkliftOperator && activeTicketForWhatsApp && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && activeTicketForWhatsApp && (
         <WhatsAppModal
           ticket={activeTicketForWhatsApp.ticket}
           settings={settings}
@@ -970,7 +1335,7 @@ export default function App() {
       )}
 
       {/* 6. Driver Master Modal */}
-      {!isForkliftOperator && showDriverMasterModal && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showDriverMasterModal && (
         <DriverMasterModal
           canManage={canManageDrivers}
           onClose={() => setShowDriverMasterModal(false)}
@@ -978,7 +1343,7 @@ export default function App() {
       )}
 
       {/* 7. Daily Report & Export Modal */}
-      {!isForkliftOperator && showDailyReportModal && canViewReports && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showDailyReportModal && canViewReports && (
         <DailyReportModal
           tickets={tickets}
           settings={settings}
@@ -990,11 +1355,16 @@ export default function App() {
       )}
 
       {/* 8. Settings Modal (Admin only) */}
-      {!isForkliftOperator && showSettingsModal && canManageSettings && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showSettingsModal && canManageSettings && (
         <SettingsModal
           settings={settings}
           onSave={(newSettings) => {
             setSettings(newSettings);
+            setPublicBranding({
+              companyName: newSettings.companyName,
+              companySubtitle: newSettings.companySubtitle,
+              logoDataUrl: newSettings.logoDataUrl,
+            });
             loadData();
           }}
           onClose={() => setShowSettingsModal(false)}
@@ -1014,7 +1384,7 @@ export default function App() {
       )}
 
       {/* 10. Admin User Management & Audit Dashboard */}
-      {!isForkliftOperator && showAdminModal && isAdmin && (
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showAdminModal && isAdmin && (
         <AdminDashboardModal
           currentUser={currentUser}
           onClose={() => {

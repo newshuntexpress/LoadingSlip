@@ -3,6 +3,11 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  DEFAULT_APP_SETTINGS,
+  DEFAULT_TICKET_RECORDS,
+  DEFAULT_DRIVER_RECORDS,
+} from './defaultRecords.ts';
 
 export interface DbRole {
   id: string;
@@ -36,19 +41,6 @@ export interface SafeUser {
   permissions: string[];
   activeSessionCount?: number;
 }
-
-const DEFAULT_APP_SETTINGS = {
-  companyName: 'SHREE BALAJI LOGISTICS & INDUSTRIAL PLANT',
-  companySubtitle: 'Material Dispatch, Gate Queue & Loading Slip Management System',
-  address: 'Plot No. 48-52, Industrial Area, Sector 5, Transport District',
-  phone: '+966 11 456 7890',
-  email: 'dispatch@balajilogistics.com',
-  gstin: '310123456700003',
-  gates: ['Gate 1', 'Gate 2', 'Gate 3', 'Gate 4'],
-  ticketPrefix: 'TK',
-  autoPrintTokenAfterSave: true,
-  sessionIdleMinutes: 30,
-};
 
 const dataDir = process.env.DB_DIR || path.join(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
@@ -181,7 +173,99 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_loading_alerts_created_at ON loading_alerts(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS liquid_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS liquid_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    code TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS liquid_tanks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    total_capacity_kg REAL NOT NULL,
+    depth_meters REAL NOT NULL,
+    location TEXT NOT NULL,
+    notes TEXT DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS liquid_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tx_code TEXT UNIQUE NOT NULL,
+    type TEXT NOT NULL,
+    tx_date TEXT NOT NULL,
+    tank_id INTEGER NOT NULL REFERENCES liquid_tanks(id),
+    material_name TEXT NOT NULL,
+    quantity_kg REAL NOT NULL,
+    quantity_mt REAL NOT NULL,
+    reference_number TEXT NOT NULL,
+    document_number TEXT DEFAULT '',
+    party_name TEXT NOT NULL,
+    vehicle_number TEXT DEFAULT '',
+    driver_name TEXT DEFAULT '',
+    remarks TEXT DEFAULT '',
+    created_by TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_liquid_tx_tank_id ON liquid_transactions(tank_id);
+  CREATE INDEX IF NOT EXISTS idx_liquid_tx_date ON liquid_transactions(tx_date);
+
+  CREATE TABLE IF NOT EXISTS liquid_audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    performed_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS ex_factory_entries (
+    id TEXT PRIMARY KEY,
+    entry_date TEXT NOT NULL,
+    del_note_number TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    truck_number TEXT NOT NULL,
+    driver_name TEXT DEFAULT '',
+    mobile_number TEXT DEFAULT '',
+    iqama_number TEXT DEFAULT '',
+    created_by TEXT,
+    updated_by TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_ex_factory_date ON ex_factory_entries(entry_date DESC, created_at DESC);
 `);
+
+// Safe additive schema migrations for existing databases
+{
+  const cols = db.prepare(`PRAGMA table_info(liquid_transactions)`).all() as Array<{ name: string }>;
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has('document_number')) {
+    db.exec(`ALTER TABLE liquid_transactions ADD COLUMN document_number TEXT DEFAULT ''`);
+  }
+  if (!colNames.has('driver_name')) {
+    db.exec(`ALTER TABLE liquid_transactions ADD COLUMN driver_name TEXT DEFAULT ''`);
+  }
+}
+
+{
+  const exCols = db.prepare(`PRAGMA table_info(ex_factory_entries)`).all() as Array<{ name: string }>;
+  const exColNames = new Set(exCols.map((c) => c.name));
+  if (!exColNames.has('driver_name')) {
+    db.exec(`ALTER TABLE ex_factory_entries ADD COLUMN driver_name TEXT DEFAULT ''`);
+  }
+}
 
 const SEED_PERMISSIONS: Array<{ id: string; key: string; name: string; category: string }> = [
   { id: 'perm_tickets_view', key: 'tickets.view', name: 'View Tickets & Live Gate Monitor', category: 'Operations' },
@@ -192,6 +276,11 @@ const SEED_PERMISSIONS: Array<{ id: string; key: string; name: string; category:
   { id: 'perm_slips_print', key: 'slips.print', name: 'Print & Export Loading Slips / Tokens', category: 'Documents' },
   { id: 'perm_drivers_manage', key: 'drivers.manage', name: 'Manage Driver & Vehicle Master Directory', category: 'Operations' },
   { id: 'perm_reports_view', key: 'reports.view', name: 'View Daily Reports & Export CSV', category: 'Reporting' },
+  { id: 'perm_liquid_store', key: 'liquid.store', name: 'Access & Manage Liquid Material Camp Store', category: 'Operations' },
+  { id: 'perm_ex_factory_view', key: 'ex_factory.view', name: 'View Ex-Factory Dispatch Entries', category: 'Operations' },
+  { id: 'perm_ex_factory_create', key: 'ex_factory.create', name: 'Create Ex-Factory Dispatch Entries', category: 'Operations' },
+  { id: 'perm_ex_factory_update', key: 'ex_factory.update', name: 'Update Ex-Factory Dispatch Entries', category: 'Operations' },
+  { id: 'perm_ex_factory_delete', key: 'ex_factory.delete', name: 'Delete Ex-Factory Dispatch Entries', category: 'Operations' },
   { id: 'perm_settings_manage', key: 'settings.manage', name: 'Manage Plant & System Settings', category: 'Administration' },
   { id: 'perm_users_manage', key: 'users.manage', name: 'Manage Users, Roles & Permissions', category: 'Administration' },
   { id: 'perm_audit_view', key: 'audit.view', name: 'View Security Audit Logs', category: 'Administration' },
@@ -205,11 +294,32 @@ const USER_DEFAULT_PERMISSION_KEYS = [
   'slips.print',
   'drivers.manage',
   'reports.view',
+  'liquid.store',
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
 ];
 
 export const FORKLIFT_ALLOWED_PERMISSION_KEYS = [
   'tickets.view',
   'forklift.operate',
+];
+
+export const LIQUID_STORE_ALLOWED_PERMISSION_KEYS = [
+  'liquid.store',
+];
+
+export const EX_FACTORY_ALLOWED_PERMISSION_KEYS = [
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
+  'ex_factory.delete',
+];
+
+export const EX_FACTORY_DEFAULT_PERMISSION_KEYS = [
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
 ];
 
 function seedDatabase(): void {
@@ -224,6 +334,20 @@ function seedDatabase(): void {
     'forklift_operator',
     'Forklift Operator',
     'Restricted access exclusively to the Forklift Operator Loading section.',
+    now
+  );
+  insertRole.run(
+    'role_liquid_store_operator',
+    'liquid_store_operator',
+    'Liquid Store Operator',
+    'Restricted access exclusively to the Liquid Material Camp Store section.',
+    now
+  );
+  insertRole.run(
+    'role_ex_factory_operator',
+    'ex_factory_operator',
+    'Ex-Factory Operator',
+    'Restricted access exclusively to the Ex-Factory Dispatch section.',
     now
   );
 
@@ -243,6 +367,12 @@ function seedDatabase(): void {
     if (FORKLIFT_ALLOWED_PERMISSION_KEYS.includes(perm.key)) {
       insertRolePerm.run('role_forklift_operator', perm.id);
     }
+    if (LIQUID_STORE_ALLOWED_PERMISSION_KEYS.includes(perm.key)) {
+      insertRolePerm.run('role_liquid_store_operator', perm.id);
+    }
+    if (EX_FACTORY_DEFAULT_PERMISSION_KEYS.includes(perm.key)) {
+      insertRolePerm.run('role_ex_factory_operator', perm.id);
+    }
   }
 
   const insertSettings = db.prepare(
@@ -250,6 +380,68 @@ function seedDatabase(): void {
   );
   insertSettings.run('active', JSON.stringify(DEFAULT_APP_SETTINGS), 'system', now);
   insertSettings.run('default', JSON.stringify(DEFAULT_APP_SETTINGS), 'system', now);
+
+  // Sync system-default settings row if it still holds the legacy placeholder
+  const defaultSettingsRow = db
+    .prepare(`SELECT value_json, updated_by FROM app_settings WHERE key = 'default'`)
+    .get() as { value_json: string; updated_by: string | null } | undefined;
+  if (defaultSettingsRow && defaultSettingsRow.updated_by === 'system') {
+    try {
+      const parsedDef = JSON.parse(defaultSettingsRow.value_json);
+      if (parsedDef?.companyName === 'SHREE BALAJI LOGISTICS & INDUSTRIAL PLANT') {
+        db.prepare(`UPDATE app_settings SET value_json = ?, updated_at = ? WHERE key = 'default'`).run(
+          JSON.stringify(DEFAULT_APP_SETTINGS),
+          now
+        );
+      }
+    } catch {
+      // Ignore malformed JSON
+    }
+  }
+
+  // Seed default tickets & drivers once on fresh databases
+  const seededMarker = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'default_records_seeded'`)
+    .get() as { key: string } | undefined;
+  if (!seededMarker) {
+    db.transaction(() => {
+      const ticketCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM tickets`).get() as { cnt: number }).cnt;
+      if (ticketCnt === 0) {
+        const insertTicket = db.prepare(
+          `INSERT OR IGNORE INTO tickets (id, ticket_number, sequence_number, date, data_json, version, created_by, updated_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        for (const t of DEFAULT_TICKET_RECORDS) {
+          insertTicket.run(
+            t.id,
+            t.ticketNumber,
+            t.sequenceNumber,
+            t.date,
+            JSON.stringify(t.data),
+            t.version,
+            t.createdBy,
+            t.updatedBy,
+            t.createdAt,
+            t.updatedAt
+          );
+        }
+      }
+
+      const driverCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM drivers`).get() as { cnt: number }).cnt;
+      if (driverCnt === 0) {
+        const insertDriver = db.prepare(
+          `INSERT OR IGNORE INTO drivers (id, truck_number, data_json, updated_at) VALUES (?, ?, ?, ?)`
+        );
+        for (const d of DEFAULT_DRIVER_RECORDS) {
+          insertDriver.run(d.id, d.truckNumber.toUpperCase(), JSON.stringify(d.data), d.updatedAt);
+        }
+      }
+
+      db.prepare(
+        `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default_records_seeded', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
+  }
 
   // Optionally auto-seed admin if ADMIN_INITIAL_PASSWORD env var is set and no users exist
   const userCountRow = db.prepare(`SELECT COUNT(*) as cnt FROM users`).get() as { cnt: number };
@@ -260,6 +452,96 @@ function seedDatabase(): void {
       `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'system', ?, ?)`
     ).run(adminId, 'admin', 'System Administrator', '', hash, 'role_admin', now, now);
+  }
+
+  seedLiquidStoreIfEmpty();
+}
+
+function nowLocalDateTimeString(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+export function resetLiquidStoreToDefault(performedBy = 'System Seed'): void {
+  const now = Date.now();
+  const txDate = nowLocalDateTimeString();
+  const dateCompact = txDate.slice(0, 10).replaceAll('-', '');
+
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM liquid_transactions`).run();
+    db.prepare(`DELETE FROM liquid_tanks`).run();
+    db.prepare(`DELETE FROM liquid_materials`).run();
+    db.prepare(`DELETE FROM liquid_audit_logs`).run();
+    db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('liquid_tanks','liquid_materials','liquid_transactions','liquid_audit_logs')`).run();
+
+    db.prepare(
+      `INSERT OR REPLACE INTO liquid_settings (id, data_json, updated_at) VALUES (1, ?, ?)`
+    ).run(
+      JSON.stringify({
+        facilityName: 'Liquid Material Camp Store — Sector 4',
+        theme: 'light',
+      }),
+      now
+    );
+
+    const insertMat = db.prepare(
+      `INSERT INTO liquid_materials (name, code, description, created_at) VALUES (?, ?, ?, ?)`
+    );
+    insertMat.run(
+      'ASPHALT 60/70',
+      'ASP-6070',
+      'Penetration grade bitumen 60/70 for paving and industrial applications',
+      now
+    );
+    insertMat.run(
+      'USED OIL',
+      'USE-OIL',
+      'Recovered industrial lubricating and furnace fuel oil',
+      now
+    );
+
+    const insertTank = db.prepare(
+      `INSERT INTO liquid_tanks (name, total_capacity_kg, depth_meters, location, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    let tank1Id: number | bigint = 1;
+    for (let i = 1; i <= 14; i++) {
+      const info = insertTank.run(
+        `Tank ${String(i).padStart(2, '0')}`,
+        2000000,
+        7,
+        i <= 7 ? 'Main Storage Bay A' : 'Main Storage Bay B',
+        'Vertical cylindrical bulk storage tank (2,000 MT / 7m)',
+        now
+      );
+      if (i === 1) tank1Id = info.lastInsertRowid;
+    }
+
+    db.prepare(
+      `INSERT INTO liquid_transactions (
+        tx_code, type, tx_date, tank_id, material_name, quantity_kg, quantity_mt,
+        reference_number, document_number, party_name, vehicle_number, driver_name, remarks, created_by, created_at
+      ) VALUES (?, 'INWARD', ?, ?, 'ASPHALT 60/70', 500000, 500, 'OPN-2026-001', 'DOC-2026-001', 'National Bitumen Refinery', 'MH-12-TK-4401', '', 'Opening baseline inventory stock', ?, ?)`
+    ).run(`INW-${dateCompact}-0001`, txDate, tank1Id, performedBy, now);
+
+    db.prepare(
+      `INSERT INTO liquid_audit_logs (action, entity_type, summary, performed_by, created_at) VALUES (?, ?, ?, ?, ?)`
+    ).run(
+      'CREATE',
+      'TRANSACTION',
+      'Initialized Tank 01 to Tank 14 (2,000 MT / 7m each) with 500,000 KG ASPHALT 60/70 in Tank 01',
+      performedBy,
+      now
+    );
+  });
+
+  tx();
+}
+
+export function seedLiquidStoreIfEmpty(): void {
+  const tankCountRow = db.prepare(`SELECT COUNT(*) as cnt FROM liquid_tanks`).get() as { cnt: number };
+  if (tankCountRow.cnt === 0) {
+    resetLiquidStoreToDefault('System Seed');
   }
 }
 
@@ -290,6 +572,26 @@ export function computeEffectivePermissions(userId: string, roleId: string, role
         .map((o) => o.permission_key);
     }
     return rolePerms.map((r) => r.key).filter((k) => forkliftAllowed.has(k));
+  }
+
+  if (roleName === 'liquid_store_operator') {
+    const liquidAllowed = new Set(LIQUID_STORE_ALLOWED_PERMISSION_KEYS);
+    if (overrides.length > 0) {
+      return overrides
+        .filter((o) => o.granted === 1 && liquidAllowed.has(o.permission_key))
+        .map((o) => o.permission_key);
+    }
+    return rolePerms.map((r) => r.key).filter((k) => liquidAllowed.has(k));
+  }
+
+  if (roleName === 'ex_factory_operator') {
+    const exFactoryAllowed = new Set(EX_FACTORY_ALLOWED_PERMISSION_KEYS);
+    if (overrides.length > 0) {
+      return overrides
+        .filter((o) => o.granted === 1 && exFactoryAllowed.has(o.permission_key))
+        .map((o) => o.permission_key);
+    }
+    return rolePerms.map((r) => r.key).filter((k) => exFactoryAllowed.has(k));
   }
 
   if (overrides.length > 0) {
@@ -337,7 +639,7 @@ export function getSafeUserById(userId: string): SafeUser | null {
     id: row.id,
     username: row.username,
     fullName: row.full_name,
-    email: row.email || '',
+    email: row.email,
     roleId: row.role_id,
     roleName: row.role_name,
     roleDisplayName: row.role_display_name,

@@ -87,9 +87,17 @@ export const TicketPrintView: React.FC<TicketPrintViewProps> = ({ ticket, settin
       {/* Gate Token Slip - compact 80mm receipt style */}
       <div className="print-ticket-container bg-white text-black w-full max-w-sm rounded-xl p-5 shadow-2xl border-2 border-dashed border-gray-400 font-sans print:border-none print:shadow-none print:p-2 print:max-w-[80mm]">
         <div className="text-center pb-3 border-b-2 border-black">
-          <div className="inline-flex items-center justify-center p-1.5 bg-black text-white rounded-lg mb-1">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
+          {settings.logoDataUrl ? (
+            <img
+              src={settings.logoDataUrl}
+              alt={settings.companyName}
+              className="h-12 w-auto max-w-[140px] object-contain mx-auto mb-1"
+            />
+          ) : (
+            <div className="inline-flex items-center justify-center p-1.5 bg-black text-white rounded-lg mb-1">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+          )}
           <h2 className="text-base font-black uppercase tracking-tight">{settings.companyName}</h2>
           <p className="text-[10px] text-gray-600">{settings.address}</p>
           <div className="mt-1 bg-black text-white text-[11px] font-extrabold uppercase py-0.5 px-3 rounded inline-block">

@@ -15,7 +15,7 @@ export const WHATSAPP_TEMPLATES: WhatsAppTemplate[] = [
     titleEnglish: 'Gate Calling Notification',
     icon: 'Megaphone',
     generateText: (ticket, companyName) => {
-      return `📢 *LOADING ALERT | CALL TO GATE*
+      return `📢 *Loading Alert | Call to Gate*
 🏢 *${companyName}*
 
 Dear Driver *${ticket.driverName || 'Partner'}*,
@@ -24,9 +24,9 @@ Your vehicle *${ticket.truckNumber}* has been called for loading at *${ticket.ga
 📌 *Ticket No:* ${ticket.ticketNumber}
 🔢 *Daily Seq:* #${ticket.sequenceNumber}
 🚪 *Loading Gate:* ${ticket.gateNumber}
-⏳ *Status:* You are NEXT in line at this gate!
+⏳ *Status:* You are next in line at this gate!
 
-⚠️ *Please place your truck at ${ticket.gateNumber} and report to the loading boy or Forklift Operator.*
+⚠️ *Please place your truck at ${ticket.gateNumber} and report to the Loading Boy or Forklift Operator.*
 Thank you!`;
     },
   },
@@ -36,7 +36,7 @@ Thank you!`;
     titleEnglish: 'Token Registration Receipt',
     icon: 'Ticket',
     generateText: (ticket, companyName) => {
-      return `🎫 *MATERIAL LOADING TICKET*
+      return `🎫 *Material Loading Ticket*
 🏢 *${companyName}*
 
 Hello *${ticket.driverName || 'Partner'}*,
@@ -50,7 +50,7 @@ Your vehicle inward entry has been registered successfully.
 • Position at Gate: *#${ticket.gateSequenceNumber}*
 • Inward Time: ${ticket.timeIn}
 
-🔔 *You will receive a WhatsApp alert when your turn is called at the gate. Please wait in the Out Side parking Safe Place.*`;
+🔔 *You will receive a WhatsApp alert when your turn is called at the gate. Please wait in the outside parking safe place.*`;
     },
   },
   {
@@ -59,7 +59,7 @@ Your vehicle inward entry has been registered successfully.
     titleEnglish: 'Loading Commenced Alert',
     icon: 'Loader2',
     generateText: (ticket, companyName) => {
-      return `🏗️ *LOADING IN PROGRESS | UNDER LOADING*
+      return `🏗️ *Loading in Progress | Under Loading*
 🏢 *${companyName}*
 
 Driver *${ticket.driverName || 'Partner'}*,
@@ -79,7 +79,7 @@ Loading for vehicle *${ticket.truckNumber}* has commenced at *${ticket.gateNumbe
     icon: 'CheckCircle2',
     generateText: (ticket, companyName) => {
       const slip = ticket.loadingSlip;
-      return `✅ *LOADING COMPLETED | READY FOR DISPATCH*
+      return `✅ *Loading Completed | Ready for Dispatch*
 🏢 *${companyName}*
 
 Loading for vehicle *${ticket.truckNumber}* at *${ticket.gateNumber}* has been successfully completed.
@@ -91,7 +91,7 @@ Loading for vehicle *${ticket.truckNumber}* at *${ticket.gateNumber}* has been s
 • Total Pallets: *${slip?.totalPallets || '0'}*
 • Loose Rolls/Packages: *${slip?.totalLooseRolls || '0'}*
 
-Please collect your 2-Copy Delivery Note from the dispatch office.
+Please collect your 2-copy Delivery Note from the Dispatch Office.
 🛣️ *Have a safe journey!*`;
     },
   },
@@ -168,5 +168,11 @@ export function openWhatsAppChat(phone: string, message: string): void {
   const cleaned = cleanPhoneNumber(phone);
   const encodedText = encodeURIComponent(message);
   const url = `https://api.whatsapp.com/send?phone=${cleaned}&text=${encodedText}`;
-  window.open(url, '_blank');
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }

@@ -41,9 +41,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [priority, setPriority] = useState<'normal' | 'urgent'>('normal');
   const [autoPrintToken, setAutoPrintToken] = useState<boolean>(settings.autoPrintTokenAfterSave ?? true);
 
-  // Filtered autocomplete suggestions for truck number
+  // Filtered autocomplete suggestions for truck number, driver name, or iqama number
   const [suggestions, setSuggestions] = useState<DriverMasterRecord[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestField, setActiveSuggestField] = useState<'truck' | 'driver' | 'iqama' | null>(null);
+  const [matchedDriver, setMatchedDriver] = useState<DriverMasterRecord | null>(null);
 
   // Dynamic gate queue calculation
   const gateQueueInfo = StorageService.getGateQueueInfo(selectedGate, date);
@@ -71,23 +72,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     }
   };
 
-  const handleTruckInput = (val: string) => {
-    setTruckNumber(val);
-    if (val.trim().length >= 2) {
-      const match = driverMasterList.filter(
-        (d) =>
-          d.truckNumber.toLowerCase().includes(val.toLowerCase()) ||
-          d.driverName.toLowerCase().includes(val.toLowerCase()) ||
-          (d.iqamaNumber && d.iqamaNumber.includes(val))
-      );
-      setSuggestions(match);
-      setShowSuggestions(match.length > 0);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSelectSuggestion = (item: DriverMasterRecord) => {
+  const applyDriverMasterRecord = (item: DriverMasterRecord) => {
     setTruckNumber(item.truckNumber);
     setDriverName(item.driverName);
     setDriverPhone(formatSaudiPhoneNumber(item.driverPhone));
@@ -96,7 +81,84 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     if (item.defaultDestination) {
       setDestinationPlace(item.defaultDestination);
     }
-    setShowSuggestions(false);
+    setMatchedDriver(item);
+  };
+
+  const findSuggestions = (raw: string): DriverMasterRecord[] => {
+    const q = raw.trim().toLowerCase();
+    if (!q) return [];
+    return driverMasterList.filter(
+      (d) =>
+        d.truckNumber.toLowerCase().includes(q) ||
+        d.driverName.toLowerCase().includes(q) ||
+        (d.iqamaNumber && d.iqamaNumber.toLowerCase().includes(q)) ||
+        (d.driverPhone && d.driverPhone.toLowerCase().includes(q))
+    );
+  };
+
+  const handleTruckInput = (val: string) => {
+    setTruckNumber(val);
+    const trimmed = val.trim().toUpperCase();
+    const exact = driverMasterList.find((d) => d.truckNumber.trim().toUpperCase() === trimmed);
+    if (exact) {
+      applyDriverMasterRecord(exact);
+    }
+    if (val.trim().length >= 2) {
+      const match = findSuggestions(val);
+      setSuggestions(match);
+      setActiveSuggestField(match.length > 0 ? 'truck' : null);
+    } else {
+      setActiveSuggestField(null);
+      if (!val.trim()) setMatchedDriver(null);
+    }
+  };
+
+  const handleDriverNameInput = (val: string) => {
+    setDriverName(val);
+    const clean = val.trim().toLowerCase();
+    const exact = clean
+      ? driverMasterList.find((d) => d.driverName.trim().toLowerCase() === clean)
+      : undefined;
+    if (exact) {
+      applyDriverMasterRecord(exact);
+      setActiveSuggestField(null);
+      return;
+    }
+    if (clean.length >= 2) {
+      const match = findSuggestions(val);
+      setSuggestions(match);
+      setActiveSuggestField(match.length > 0 ? 'driver' : null);
+    } else {
+      setActiveSuggestField(null);
+      if (!clean) setMatchedDriver(null);
+    }
+  };
+
+  const handleIqamaInput = (val: string) => {
+    setIqamaNumber(val);
+    const clean = val.trim().toLowerCase();
+    const exact =
+      clean.length >= 4
+        ? driverMasterList.find((d) => (d.iqamaNumber || '').trim().toLowerCase() === clean)
+        : undefined;
+    if (exact) {
+      applyDriverMasterRecord(exact);
+      setActiveSuggestField(null);
+      return;
+    }
+    if (clean.length >= 2) {
+      const match = findSuggestions(val);
+      setSuggestions(match);
+      setActiveSuggestField(match.length > 0 ? 'iqama' : null);
+    } else {
+      setActiveSuggestField(null);
+      if (!clean) setMatchedDriver(null);
+    }
+  };
+
+  const handleSelectSuggestion = (item: DriverMasterRecord) => {
+    applyDriverMasterRecord(item);
+    setActiveSuggestField(null);
   };
 
   const handleSubmit = async (action?: 'print' | 'whatsapp') => {
@@ -122,28 +184,29 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
     const cleanDelNote = delNoteNumber.trim().toUpperCase();
 
+    const cleanDest = destinationPlace.trim().toUpperCase();
     setSubmitting(true);
     try {
       const newTicket = await ApiClient.createTicket({
-        ticketNumber,
+        ticketNumber: ticketNumber.toUpperCase(),
         sequenceNumber: nextSeq,
         date,
         timeIn: getCurrentTimeString(),
-        gateNumber: selectedGate,
+        gateNumber: selectedGate.trim(),
         gateSequenceNumber: calculatedGateSeq,
         delNoteNumber: cleanDelNote,
         truckNumber: truckNumber.trim().toUpperCase(),
-        driverName: driverName.trim(),
+        driverName: driverName.trim().toUpperCase(),
         driverPhone: formattedPhone,
-        iqamaNumber: iqamaNumber.trim(),
-        transporterName: transporterName.trim(),
-        destinationPlace: destinationPlace.trim(),
+        iqamaNumber: iqamaNumber.trim().toUpperCase(),
+        transporterName: transporterName.trim().toUpperCase(),
+        destinationPlace: cleanDest,
         status: 'waiting',
         priority,
-        remarks: remarks.trim(),
+        remarks: remarks.trim().toUpperCase(),
         loadingSlip: {
           delNoteNumber: cleanDelNote,
-          placeName: destinationPlace.trim(),
+          placeName: cleanDest,
           preparedBy: '',
           checkedBy: '',
           items: createEmpty8Rows(),
@@ -190,19 +253,19 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         {/* Auto Generated Numbers Badge */}
         <div className="bg-blue-50/70 border-b border-blue-100 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
           <div className="bg-white p-2 rounded-xl border border-blue-200 shadow-sm">
-            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Ticket Number</span>
+            <span className="text-[10px] font-bold text-neutral-500 block">Ticket Number</span>
             <span className="text-sm font-black text-blue-900">{ticketNumber}</span>
           </div>
           <div className="bg-white p-2 rounded-xl border border-blue-200 shadow-sm">
-            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Daily Overall Seq</span>
+            <span className="text-[10px] font-bold text-neutral-500 block">Daily Overall Seq</span>
             <span className="text-sm font-black text-indigo-700">#{nextSeq}</span>
           </div>
           <div className="bg-white p-2 rounded-xl border border-blue-200 shadow-sm">
-            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Selected Gate</span>
+            <span className="text-[10px] font-bold text-neutral-500 block">Selected Gate</span>
             <span className="text-sm font-black text-emerald-800">{selectedGate}</span>
           </div>
           <div className="bg-white p-2 rounded-xl border border-blue-200 shadow-sm">
-            <span className="text-[10px] uppercase font-bold text-neutral-500 block">Position at Gate</span>
+            <span className="text-[10px] font-bold text-neutral-500 block">Position at Gate</span>
             <span className="text-sm font-black text-purple-800">#{gateQueueInfo.myPositionAtGate}</span>
           </div>
         </div>
@@ -212,12 +275,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           {/* Delivery Note Number (Del Note No.) * - MANDATORY */}
           <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-300">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+              <label className="text-xs font-black text-amber-950 tracking-wide flex items-center gap-1.5">
                 <FileText className="w-4 h-4 text-amber-700" />
                 <span>Delivery Note Number (Del Note No.) *</span>
               </label>
               <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
-                REQUIRED
+                Required
               </span>
             </div>
             <input
@@ -235,7 +298,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
           {/* Truck Number with Autocomplete */}
           <div className="relative">
-            <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+            <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
               Vehicle / Truck Number *
             </label>
             <div className="relative">
@@ -247,18 +310,25 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 value={truckNumber}
                 onChange={(e) => handleTruckInput(e.target.value)}
                 onFocus={() => {
-                  if (truckNumber.trim().length >= 1) setShowSuggestions(true);
+                  if (truckNumber.trim().length >= 1) {
+                    const m = findSuggestions(truckNumber);
+                    setSuggestions(m);
+                    setActiveSuggestField(m.length > 0 ? 'truck' : null);
+                  }
                 }}
                 placeholder="e.g. 5275 AXG"
                 className="w-full pl-9 pr-3 py-2 text-sm font-black uppercase tracking-wider rounded-xl border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white shadow-sm font-mono"
               />
             </div>
 
-            {/* Autocomplete Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
+            {/* Autocomplete Dropdown for Truck */}
+            {activeSuggestField === 'truck' && suggestions.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-neutral-100">
-                <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 bg-neutral-50 uppercase tracking-wide">
-                  Saved Master Directory (Click to Auto-fill):
+                <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 bg-neutral-50 tracking-wide flex items-center justify-between">
+                  <span>Saved Master Directory (Click to Auto-fill)</span>
+                  <button type="button" onClick={() => setActiveSuggestField(null)} className="text-neutral-500 hover:text-neutral-800">
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
                 {suggestions.map((item) => (
                   <button
@@ -284,8 +354,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
           {/* Driver Name, Phone & Iqama */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+            <div className="relative">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Driver Name *
               </label>
               <div className="relative">
@@ -295,15 +365,46 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 <input
                   type="text"
                   value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
-                  placeholder="e.g. Rameshwar Yadav"
+                  onChange={(e) => handleDriverNameInput(e.target.value)}
+                  onFocus={() => {
+                    if (driverName.trim().length >= 2) {
+                      const m = findSuggestions(driverName);
+                      setSuggestions(m);
+                      setActiveSuggestField(m.length > 0 ? 'driver' : null);
+                    }
+                  }}
+                  placeholder="Type driver name to auto-fill"
                   className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
                 />
               </div>
+              {activeSuggestField === 'driver' && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 sm:w-80 right-0 mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-neutral-100">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 bg-neutral-50 tracking-wide flex items-center justify-between">
+                    <span>Matched Drivers</span>
+                    <button type="button" onClick={() => setActiveSuggestField(null)} className="text-neutral-500 hover:text-neutral-800">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {suggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(item)}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50/80 transition text-xs cursor-pointer"
+                    >
+                      <div className="font-bold text-blue-900">{item.driverName}</div>
+                      <div className="text-[11px] text-neutral-600 font-mono">
+                        {item.truckNumber} · {item.driverPhone}
+                        {item.iqamaNumber ? ` · Iqama: ${item.iqamaNumber}` : ''}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Driver Mobile / WhatsApp *
               </label>
               <div className="relative">
@@ -321,8 +422,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+            <div className="relative">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 ID / Iqama Number
               </label>
               <div className="relative">
@@ -332,18 +433,73 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 <input
                   type="text"
                   value={iqamaNumber}
-                  onChange={(e) => setIqamaNumber(e.target.value)}
-                  placeholder="e.g. 2481928491"
+                  onChange={(e) => handleIqamaInput(e.target.value)}
+                  onFocus={() => {
+                    if (iqamaNumber.trim().length >= 2) {
+                      const m = findSuggestions(iqamaNumber);
+                      setSuggestions(m);
+                      setActiveSuggestField(m.length > 0 ? 'iqama' : null);
+                    }
+                  }}
+                  placeholder="Type Iqama No. to auto-fill"
                   className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-mono"
                 />
               </div>
+              {activeSuggestField === 'iqama' && suggestions.length > 0 && (
+                <div className="absolute top-full right-0 sm:w-80 left-0 sm:left-auto mt-1 bg-white border border-neutral-200 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-neutral-100">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 bg-neutral-50 tracking-wide flex items-center justify-between">
+                    <span>Matched by Iqama</span>
+                    <button type="button" onClick={() => setActiveSuggestField(null)} className="text-neutral-500 hover:text-neutral-800">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {suggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectSuggestion(item)}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50/80 transition text-xs cursor-pointer"
+                    >
+                      <div className="font-bold text-blue-900 font-mono">
+                        Iqama: {item.iqamaNumber || '—'} · {item.truckNumber}
+                      </div>
+                      <div className="text-[11px] text-neutral-600">
+                        {item.driverName} · {item.driverPhone}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+
+          {matchedDriver && (
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-extrabold text-emerald-800 text-[10px] tracking-wider bg-emerald-100 px-2 py-0.5 rounded">
+                  Driver Details Matched
+                </span>
+                <span className="font-bold">{matchedDriver.driverName}</span>
+                <span className="font-mono font-bold text-blue-900">{matchedDriver.truckNumber}</span>
+                <span className="font-mono">{matchedDriver.driverPhone}</span>
+                {matchedDriver.iqamaNumber && <span className="font-mono">Iqama: {matchedDriver.iqamaNumber}</span>}
+                {matchedDriver.transporterName && <span>· {matchedDriver.transporterName}</span>}
+                {matchedDriver.defaultDestination && <span>· {matchedDriver.defaultDestination}</span>}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMatchedDriver(null)}
+                className="text-emerald-700 hover:text-emerald-950 text-[11px] font-bold cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* Place Name and Transporter Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Destination Place / Unloading Point
               </label>
               <div className="relative">
@@ -361,7 +517,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Transporter / Company Name
               </label>
               <div className="relative">
@@ -381,7 +537,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
           {/* Gate Selection with Live Queue Status */}
           <div>
-            <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1.5">
+            <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1.5">
               Assign Loading Gate:
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -424,7 +580,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           {/* Priority & Remarks */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Loading Priority
               </label>
               <select
@@ -437,7 +593,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               </select>
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs font-bold text-neutral-700 uppercase tracking-wide block mb-1">
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Special Remarks / Notes
               </label>
               <input

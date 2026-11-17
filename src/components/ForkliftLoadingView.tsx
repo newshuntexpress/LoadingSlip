@@ -144,7 +144,10 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
   const gateFilteredTickets = useMemo(() => {
     return tickets.filter((t) => {
       if (t.status === 'cancelled') return false;
-      if (selectedGates.length > 0 && !selectedGates.includes(t.gateNumber)) {
+      if (
+        selectedGates.length > 0 &&
+        !selectedGates.some((g) => g.trim().toUpperCase() === (t.gateNumber || '').trim().toUpperCase())
+      ) {
         return false;
       }
       if (searchQuery.trim()) {
@@ -280,12 +283,12 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
     // Format neatly as DD-MM-YYYY and append/set without deleting existing custom batch notes if desired
     const parts = isoDate.split('-');
     const formatted = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : isoDate;
-    const existingText = (draftRemarks[rowIdx] ?? '').trim();
+    const existingText = (draftRemarks[rowIdx] ?? '').trim().toUpperCase();
     const nextRemarks = existingText
       ? existingText.includes(formatted)
         ? existingText
-        : `${existingText} | Prod: ${formatted}`
-      : `Prod Date: ${formatted}`;
+        : `${existingText} | PROD: ${formatted}`
+      : `PROD DATE: ${formatted}`;
 
     setDraftRemarks((prev) => ({ ...prev, [rowIdx]: nextRemarks }));
     setDirtyRows((prev) => ({ ...prev, [rowIdx]: true }));
@@ -351,23 +354,23 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
   const renderTicketStatusBadge = (ticket: TicketRecord) => {
     if (ticket.status === 'completed' || ticket.loadingSlip?.isLocked) {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F1FDF6] text-[#107E3E] border border-[#ABE2C2]">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[#107E3E] shrink-0" />
           Loading Completed
         </span>
       );
     }
     if (ticket.status === 'under_loading') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FEF7F1] text-[#A64B00] border border-[#F9C99B]">
+          <Clock className="w-3.5 h-3.5 text-[#E9730C] shrink-0" />
           Under Loading
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-300">
-        <span className="w-1.5 h-1.5 rounded-full bg-neutral-500" />
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]">
+        <Clock className="w-3 h-3 text-[#5B738B] shrink-0" />
         Waiting in Queue
       </span>
     );
@@ -465,48 +468,48 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
         )}
 
         {/* Loading Slip Details Card */}
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-neutral-900 to-blue-950 text-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden">
+          <div className="bg-[#354A5F] text-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-[#0A6ED1]">
             <div>
-              <span className="text-[10px] uppercase tracking-wider font-bold text-blue-300 block">
+              <span className="text-[10px] tracking-wider font-bold text-[#F0AB00] block">
                 Assigned Forklift Loading Slip
               </span>
               <h2 className="text-base sm:text-lg font-black tracking-wide">
                 DN: {slip?.delNoteNumber || selectedTicket.delNoteNumber || '—'} • Truck: {selectedTicket.truckNumber}
               </h2>
             </div>
-            <div className="text-xs bg-white/10 border border-white/15 px-3 py-1.5 rounded-xl font-bold">
+            <div className="text-xs bg-[#243647] border border-[#4A6580] px-3 py-1.5 rounded-lg font-bold text-[#EBF5FF]">
               Operator: {currentUser.fullName}
             </div>
           </div>
 
           <div className="p-3 sm:p-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-neutral-50 border-b border-neutral-200 text-xs">
             <div className="bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">Delivery Number</span>
+              <span className="text-[10px] font-bold text-neutral-500 block">Delivery Number</span>
               <span className="font-black text-blue-900 font-mono text-sm break-all">
                 {slip?.delNoteNumber || selectedTicket.delNoteNumber || '—'}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">Truck Number</span>
+              <span className="text-[10px] font-bold text-neutral-500 block">Truck Number</span>
               <span className="font-black text-neutral-900 font-mono text-sm">
                 {selectedTicket.truckNumber}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">Gate Number</span>
+              <span className="text-[10px] font-bold text-neutral-500 block">Gate Number</span>
               <span className="font-black text-indigo-800 text-sm">
                 {selectedTicket.gateNumber}
               </span>
             </div>
             <div className="bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">Checklist Progress</span>
+              <span className="text-[10px] font-bold text-neutral-500 block">Checklist Progress</span>
               <span className="font-black text-emerald-700 text-sm">
                 {completedCount} / {activeMaterials.length} Completed
               </span>
             </div>
             <div className="col-span-2 bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">
+              <span className="text-[10px] font-bold text-neutral-500 block">
                 Customer / Delivery Details
               </span>
               <span className="font-bold text-neutral-900 block">
@@ -518,7 +521,7 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
               </span>
             </div>
             <div className="col-span-2 bg-white p-2.5 rounded-xl border border-neutral-200">
-              <span className="text-[10px] font-bold uppercase text-neutral-500 block">Ticket &amp; Totals</span>
+              <span className="text-[10px] font-bold text-neutral-500 block">Ticket &amp; Totals</span>
               <span className="font-bold text-neutral-900 block">
                 {selectedTicket.ticketNumber} (Seq #{selectedTicket.sequenceNumber})
               </span>
@@ -551,7 +554,7 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
           {/* Material Checklist */}
           <div className="p-3 sm:p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-neutral-800 flex items-center gap-1.5">
+              <h3 className="text-xs sm:text-sm font-black tracking-wide text-neutral-800 flex items-center gap-1.5">
                 <PackageCheck className="w-4 h-4 text-blue-700" />
                 <span>Material Loading Checklist</span>
               </h3>
@@ -668,7 +671,8 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                             disabled={isLocked}
                             value={currentLoadedQty}
                             onChange={(e) => {
-                              setDraftQty((prev) => ({ ...prev, [index]: e.target.value }));
+                              const upper = e.target.value.toUpperCase();
+                              setDraftQty((prev) => ({ ...prev, [index]: upper }));
                               setDirtyRows((prev) => ({ ...prev, [index]: true }));
                             }}
                             onBlur={() => handleSaveRowFields(selectedTicket, index)}
@@ -687,7 +691,8 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                               disabled={isLocked}
                               value={currentRemarks}
                               onChange={(e) => {
-                                setDraftRemarks((prev) => ({ ...prev, [index]: e.target.value }));
+                                const upper = e.target.value.toUpperCase();
+                                setDraftRemarks((prev) => ({ ...prev, [index]: upper }));
                                 setDirtyRows((prev) => ({ ...prev, [index]: true }));
                               }}
                               onBlur={() => handleSaveRowFields(selectedTicket, index)}
@@ -793,21 +798,21 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
 
       {/* Next Recommended Loading Highlight Card */}
       {nextRecommendedTicket && (
-        <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-neutral-900 text-white rounded-2xl p-4 shadow-md border border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-gradient-to-r from-[#354A5F] to-[#243647] text-white rounded-xl p-4 shadow-md border border-[#4A6580] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-400 text-neutral-950">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-[#F0AB00] text-[#1C2833]">
                 <Sparkles className="w-3 h-3" />
                 {nextRecommendedTicket.status === 'under_loading' ? 'Active Loading Now' : 'Next Loading Up'}
               </span>
-              <span className="text-xs font-bold text-blue-200">
+              <span className="text-xs font-bold text-[#8AC4FF]">
                 {nextRecommendedTicket.gateNumber} (Pos #{nextRecommendedTicket.gateSequenceNumber})
               </span>
             </div>
             <p className="text-sm sm:text-base font-black tracking-wide truncate">
               DN: {nextRecommendedTicket.loadingSlip?.delNoteNumber || nextRecommendedTicket.delNoteNumber || '—'} • Truck: {nextRecommendedTicket.truckNumber}
             </p>
-            <p className="text-xs text-blue-100 truncate">
+            <p className="text-xs text-[#CBD8E6] truncate">
               {nextRecommendedTicket.loadingSlip?.placeName || nextRecommendedTicket.destinationPlace || 'Destination N/A'} • Driver: {nextRecommendedTicket.driverName}
             </p>
           </div>
@@ -816,7 +821,7 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
             type="button"
             disabled={openingId === nextRecommendedTicket.id}
             onClick={() => handleOpenSlip(nextRecommendedTicket)}
-            className="app-btn w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black shadow shrink-0"
+            className="app-btn w-full sm:w-auto bg-[#107E3E] hover:bg-[#0D6B34] text-white font-black shadow shrink-0 border border-[#24A159]"
           >
             {openingId === nextRecommendedTicket.id ? (
               <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -831,14 +836,14 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
       )}
 
       {/* Gate-Wise Multi-Select Filter & Search Controls */}
-      <div className="bg-white p-3.5 rounded-2xl border border-neutral-200 shadow-sm space-y-3">
+      <div className="bg-white p-3.5 rounded-xl border border-[#D1DBE5] shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xs sm:text-sm font-black uppercase tracking-wide text-neutral-800 flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-blue-700" />
+            <h2 className="text-xs sm:text-sm font-black tracking-wide text-[#354A5F] flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-[#0A6ED1]" />
               <span>Gate-Wise Filter (Select One or Multiple Gates)</span>
             </h2>
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-[#5B738B]">
               {selectedGates.length === 0
                 ? 'Showing all gates'
                 : `Selected: ${selectedGates.join(', ')}`}
@@ -847,20 +852,20 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:w-56">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400 pointer-events-none" />
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#5B738B] pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Delivery No, Truck, Customer..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-neutral-300 bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-[#BCC8D4] bg-[#F7F9FB] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1]"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-neutral-300 bg-neutral-50 text-neutral-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-[#BCC8D4] bg-[#F7F9FB] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
             >
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending / Queue</option>
@@ -877,8 +882,8 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
             onClick={selectAllGates}
             className={`app-btn-sm border ${
               selectedGates.length === 0
-                ? 'bg-neutral-900 text-white border-neutral-900'
-                : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border-neutral-300'
+                ? 'bg-[#354A5F] text-white border-[#354A5F]'
+                : 'bg-[#EFF4F9] hover:bg-[#E3EAF2] text-[#354A5F] border-[#BCC8D4]'
             }`}
           >
             <DoorOpen className="w-3.5 h-3.5 shrink-0" />
@@ -887,8 +892,13 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
 
           {settings.gates.map((gate) => {
             const active = selectedGates.includes(gate);
+            const normGate = gate.trim().toUpperCase();
             const gatePendingCount = tickets.filter(
-              (t) => t.gateNumber === gate && t.status !== 'completed' && t.status !== 'cancelled' && !t.loadingSlip?.isLocked
+              (t) =>
+                (t.gateNumber || '').trim().toUpperCase() === normGate &&
+                t.status !== 'completed' &&
+                t.status !== 'cancelled' &&
+                !t.loadingSlip?.isLocked
             ).length;
             return (
               <button
@@ -897,14 +907,14 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                 onClick={() => toggleGate(gate)}
                 className={`app-btn-sm border ${
                   active
-                    ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                    : 'bg-white hover:bg-blue-50 text-neutral-800 border-neutral-300'
+                    ? 'bg-[#0A6ED1] text-white border-[#0A6ED1] shadow-xs'
+                    : 'bg-white hover:bg-[#EBF5FF] text-[#354A5F] border-[#BCC8D4]'
                 }`}
               >
                 <span>{gate}</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                    active ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-700'
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                    active ? 'bg-white/20 text-white' : 'bg-[#EFF4F9] text-[#354A5F]'
                   }`}
                 >
                   {gatePendingCount}
@@ -919,7 +929,7 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
       {statusFilter !== 'COMPLETED' && (
         <div className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-neutral-800 flex items-center gap-2">
+            <h3 className="text-xs sm:text-sm font-black tracking-wider text-neutral-800 flex items-center gap-2">
               <Truck className="w-4 h-4 text-amber-600" />
               <span>Pending &amp; Active Loadings ({pendingTickets.length})</span>
             </h3>
@@ -942,21 +952,21 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                 return (
                   <div
                     key={ticket.id}
-                    className={`bg-white rounded-2xl border p-4 shadow-sm flex flex-col justify-between gap-3 transition ${
+                    className={`bg-white rounded-xl border p-4 shadow-xs flex flex-col justify-between gap-3 transition ${
                       ticket.status === 'under_loading'
-                        ? 'border-amber-400 ring-1 ring-amber-200'
+                        ? 'border-[#E9730C] ring-1 ring-[#F9C99B]'
                         : isNextUp
-                        ? 'border-blue-400 ring-1 ring-blue-100'
-                        : 'border-neutral-200'
+                        ? 'border-[#0A6ED1] ring-1 ring-[#B8DCFF]'
+                        : 'border-[#D1DBE5]'
                     }`}
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-neutral-900 text-white">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-black bg-[#354A5F] text-white">
                             {ticket.gateNumber}
                           </span>
-                          <span className="text-[11px] font-bold text-neutral-500">
+                          <span className="text-[11px] font-bold text-[#5B738B]">
                             Queue #{idx + 1} • {ticket.ticketNumber}
                           </span>
                         </div>
@@ -964,22 +974,22 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                       </div>
 
                       <div>
-                        <p className="text-xs font-bold text-blue-900 font-mono">
+                        <p className="text-xs font-bold text-[#0A6ED1] font-mono">
                           DN: {ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber || '—'}
                         </p>
-                        <p className="text-base font-black text-neutral-900 tracking-wide">
+                        <p className="text-base font-black text-[#1C2833] tracking-wide">
                           {ticket.truckNumber}
                         </p>
-                        <p className="text-xs text-neutral-600 font-medium truncate">
+                        <p className="text-xs text-[#475E75] font-medium truncate">
                           {ticket.loadingSlip?.placeName || ticket.destinationPlace || 'Destination N/A'} • {ticket.driverName}
                         </p>
                       </div>
 
-                      <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-[11px] flex items-center justify-between">
-                        <span className="font-semibold text-neutral-700">
+                      <div className="bg-[#F7F9FB] border border-[#D1DBE5] rounded-lg p-2 text-[11px] flex items-center justify-between">
+                        <span className="font-semibold text-[#354A5F]">
                           Materials: <strong>{checkedCount}/{activeMaterials.length}</strong> Loaded
                         </span>
-                        <span className="font-bold text-neutral-600">
+                        <span className="font-bold text-[#5B738B]">
                           {ticket.loadingSlip?.totalQty || 0} Qty • {ticket.loadingSlip?.totalPallets || 0} Pallets
                         </span>
                       </div>
@@ -991,8 +1001,8 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                       onClick={() => handleOpenSlip(ticket)}
                       className={`app-btn w-full ${
                         ticket.status === 'under_loading'
-                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                          : 'bg-blue-700 hover:bg-blue-600 text-white'
+                          ? 'bg-[#E9730C] hover:bg-[#C25900] text-white'
+                          : 'bg-[#0A6ED1] hover:bg-[#085CAF] text-white'
                       }`}
                     >
                       {openingId === ticket.id ? (
@@ -1016,14 +1026,14 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
       {statusFilter !== 'PENDING' && statusFilter !== 'UNDER_LOADING' && (
         <div className="space-y-2.5 pt-2">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <h3 className="text-xs sm:text-sm font-black tracking-wider text-[#107E3E] flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[#107E3E]" />
               <span>Completed Loadings ({completedTickets.length})</span>
             </h3>
           </div>
 
           {completedTickets.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-neutral-200 p-6 text-center text-xs text-neutral-500">
+            <div className="bg-white rounded-xl border border-[#D1DBE5] p-6 text-center text-xs text-[#5B738B]">
               No completed loadings for the selected gates yet.
             </div>
           ) : (
@@ -1033,21 +1043,21 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                 return (
                   <div
                     key={ticket.id}
-                    className="bg-emerald-50/40 rounded-2xl border border-emerald-200 p-4 shadow-xs flex flex-col justify-between gap-3"
+                    className="bg-[#F1FDF6] rounded-xl border border-[#ABE2C2] p-4 shadow-xs flex flex-col justify-between gap-3"
                   >
                     <div className="space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
-                        <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-emerald-900 text-white">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-black bg-[#107E3E] text-white">
                           {ticket.gateNumber}
                         </span>
                         {renderTicketStatusBadge(ticket)}
                       </div>
 
-                      <p className="text-xs font-bold text-emerald-900 font-mono">
+                      <p className="text-xs font-bold text-[#107E3E] font-mono">
                         DN: {ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber || '—'}
                       </p>
-                      <p className="text-sm font-black text-neutral-900">{ticket.truckNumber}</p>
-                      <p className="text-[11px] text-neutral-600">
+                      <p className="text-sm font-black text-[#1C2833]">{ticket.truckNumber}</p>
+                      <p className="text-[11px] text-[#354A5F]">
                         Completed By: <strong>{ticket.loadingSlip?.loadingCompletedBy || ticket.loadingSlip?.checkedBy || 'Operator'}</strong>
                         <br />
                         Time: {ticket.loadingSlip?.loadingCompletedTime || ticket.timeCompleted || 'Recorded'}
@@ -1060,18 +1070,18 @@ export const ForkliftLoadingView: React.FC<ForkliftLoadingViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenSlip(ticket)}
-                        className="app-btn-sm w-full bg-white hover:bg-neutral-100 text-neutral-800 border border-neutral-300"
+                        className="app-btn-sm w-full bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]"
                       >
-                        <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                        <Lock className="w-3.5 h-3.5 text-[#107E3E] shrink-0" />
                         <span>View Locked Slip</span>
                       </button>
                       {canPrint && (
                         <button
                           type="button"
                           onClick={() => onPrintLoadingSlip(ticket)}
-                          className="app-btn-sm w-full bg-neutral-800 hover:bg-neutral-900 text-white"
+                          className="app-btn-sm w-full bg-[#354A5F] hover:bg-[#243647] text-white"
                         >
-                          <Printer className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                          <Printer className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
                           <span>Print Slip</span>
                         </button>
                       )}

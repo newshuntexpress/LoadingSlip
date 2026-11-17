@@ -7,13 +7,8 @@ import {
   MessageSquare,
   CheckCircle2,
   Clock,
-  Play,
   Megaphone,
-  MoreVertical,
   Trash2,
-  Edit,
-  ExternalLink,
-  ChevronDown,
 } from 'lucide-react';
 
 interface TicketTableProps {
@@ -62,35 +57,35 @@ export const TicketTable: React.FC<TicketTableProps> = ({
     switch (status) {
       case 'waiting':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]">
+            <Clock className="w-3 h-3 text-[#5B738B]" />
             Waiting in Queue
           </span>
         );
       case 'called':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-300">
-            <Megaphone className="w-3 h-3 text-indigo-600" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EBF5FF] text-[#0854A0] border border-[#B8DCFF]">
+            <Megaphone className="w-3 h-3 text-[#0A6ED1]" />
             Called to Gate
           </span>
         );
       case 'under_loading':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
-            <Clock className="w-3 h-3 text-amber-600" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FEF7F1] text-[#A64B00] border border-[#F9C99B]">
+            <Clock className="w-3 h-3 text-[#E9730C]" />
             Under Loading
           </span>
         );
       case 'completed':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F1FDF6] text-[#107E3E] border border-[#ABE2C2]">
+            <CheckCircle2 className="w-3 h-3 text-[#107E3E]" />
             Completed
           </span>
         );
       case 'cancelled':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-300">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FFF0F0] text-[#BB0000] border border-[#F4B8B8]">
             Cancelled
           </span>
         );
@@ -101,9 +96,9 @@ export const TicketTable: React.FC<TicketTableProps> = ({
 
   if (tickets.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-neutral-200 p-12 text-center text-neutral-500 shadow-sm">
-        <p className="text-base font-bold text-neutral-700 mb-1">No vehicle loading records found for this date</p>
-        <p className="text-xs text-neutral-500">
+      <div className="bg-white rounded-xl border border-[#D1DBE5] p-12 text-center text-[#5B738B] shadow-xs">
+        <p className="text-base font-bold text-[#354A5F] mb-1">No vehicle loading records found for this date</p>
+        <p className="text-xs text-[#5B738B]">
           Click "+ New Gate Ticket" to register a new loading vehicle.
         </p>
       </div>
@@ -111,19 +106,19 @@ export const TicketTable: React.FC<TicketTableProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="bg-neutral-900 text-white text-[11px] uppercase tracking-wider font-bold">
+            <tr className="bg-[#354A5F] text-white text-[11px] uppercase tracking-wider font-bold border-b-2 border-[#0A6ED1]">
               <th
                 onClick={() => setSortAsc(!sortAsc)}
-                className="py-3 px-3 text-center w-16 cursor-pointer hover:bg-neutral-800 transition select-none"
+                className="py-3 px-3 text-center w-16 cursor-pointer hover:bg-[#2B3E50] transition select-none"
                 title="Click to toggle Ascending (1, 2, 3...) or Descending"
               >
                 <div className="flex items-center justify-center gap-1">
                   <span>Seq</span>
-                  <span className="text-[10px] text-amber-400 font-mono font-bold">
+                  <span className="text-[10px] text-[#F0AB00] font-mono font-bold">
                     {sortAsc ? '▲ #1' : '▼ #9'}
                   </span>
                 </div>
@@ -138,32 +133,32 @@ export const TicketTable: React.FC<TicketTableProps> = ({
               <th className="py-3 px-3 text-center min-w-[280px]">Quick Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-200 font-sans">
+          <tbody className="divide-y divide-[#E3EAF2] font-sans">
             {sortedTickets.map((t) => {
               const slip = t.loadingSlip;
               return (
                 <tr
                   key={t.id}
-                  className={`hover:bg-blue-50/40 transition ${
+                  className={`hover:bg-[#EBF5FF]/55 transition ${
                     t.status === 'under_loading'
-                      ? 'bg-amber-50/30'
+                      ? 'bg-[#FEF7F1]/60'
                       : t.status === 'called'
-                      ? 'bg-indigo-50/30'
+                      ? 'bg-[#EBF5FF]/40'
                       : ''
                   }`}
                 >
                   {/* Daily Sequence*/ }
-                  <td className="py-3 px-3 text-center font-black text-sm text-neutral-700">
+                  <td className="py-3 px-3 text-center font-black text-sm text-[#354A5F] tabular-nums">
                     #{t.sequenceNumber}
                   </td>
 
                   {/* Ticket Number*/ }
                   <td className="py-3 px-3">
-                    <span className="font-extrabold text-blue-900 block">{t.ticketNumber}</span>
+                    <span className="font-extrabold text-[#0A6ED1] block font-mono">{t.ticketNumber}</span>
                     {canPrint && (
                       <button
                         onClick={() => onPrintTicket(t)}
-                        className="text-[10px] text-neutral-500 hover:text-blue-700 font-medium inline-flex items-center gap-0.5 cursor-pointer mt-0.5"
+                        className="text-[10px] text-[#5B738B] hover:text-[#0A6ED1] font-medium inline-flex items-center gap-0.5 cursor-pointer mt-0.5"
                       >
                         <Printer className="w-3 h-3" />
                         <span>Print Token</span>
@@ -173,31 +168,31 @@ export const TicketTable: React.FC<TicketTableProps> = ({
 
                   {/* Gate Number & Gate Sequence Number*/ }
                   <td className="py-3 px-3">
-                    <div className="inline-block bg-neutral-100 border border-neutral-300 px-2 py-0.5 rounded-lg text-neutral-800 font-black text-xs">
+                    <div className="inline-block bg-[#EFF4F9] border border-[#BCC8D4] px-2 py-0.5 rounded text-[#354A5F] font-black text-xs">
                       {t.gateNumber}
                     </div>
-                    <p className="text-[11px] font-bold text-purple-700 mt-0.5">
+                    <p className="text-[11px] font-bold text-[#0A6ED1] mt-0.5">
                       {t.status === 'under_loading'
-                        ? '🟢 In Progress'
+                        ? 'In Progress'
                         : `Gate Pos: ${t.gateSequenceNumber}`}
                     </p>
                   </td>
 
                   {/* Truck & Driver */ }
                   <td className="py-3 px-3">
-                    <p className="font-black text-neutral-900 tracking-wide text-xs">{t.truckNumber}</p>
-                    <p className="text-[11px] text-neutral-600 font-medium">{t.driverName}</p>
-                    <p className="text-[10.5px] text-emerald-800 font-mono font-bold flex items-center gap-1">
+                    <p className="font-black text-[#1C2833] tracking-wide text-xs">{t.truckNumber}</p>
+                    <p className="text-[11px] text-[#354A5F] font-medium">{t.driverName}</p>
+                    <p className="text-[10.5px] text-[#107E3E] font-mono font-bold flex items-center gap-1">
                       <span>{formatSaudiPhoneNumber(t.driverPhone)}</span>
                     </p>
                   </td>
 
                   {/* Destination */}
                   <td className="py-3 px-3">
-                    <span className="font-semibold text-neutral-800 block text-[11px]">
+                    <span className="font-semibold text-[#1C2833] block text-[11px]">
                       {t.destinationPlace || 'N/A'}
                     </span>
-                    <span className="text-[10px] text-neutral-500 truncate max-w-[120px] block">
+                    <span className="text-[10px] text-[#5B738B] truncate max-w-[120px] block">
                       {t.transporterName || 'Self Transport'}
                     </span>
                   </td>
@@ -211,7 +206,7 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                         <select
                           value={t.status}
                           onChange={(e) => onStatusChange(t, e.target.value as TruckStatus)}
-                          className="text-[10px] py-0.5 px-1.5 rounded border border-neutral-300 bg-white font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                          className="text-[10px] py-0.5 px-1.5 rounded border border-[#BCC8D4] bg-white font-medium text-[#1C2833] focus:outline-none focus:ring-1 focus:ring-[#0A6ED1] cursor-pointer"
                         >
                           <option value="waiting">Waiting</option>
                           <option value="called">Called</option>
@@ -227,56 +222,56 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                   <td className="py-3 px-3">
                     {slip || t.delNoteNumber ? (
                       <div className="space-y-0.5">
-                        <span className="font-bold text-neutral-900 text-[11px] block font-mono">
+                        <span className="font-bold text-[#1C2833] text-[11px] block font-mono">
                           {slip?.delNoteNumber || t.delNoteNumber}
                         </span>
                         {slip && (slip.totalQty > 0 || slip.totalPallets > 0) ? (
-                          <div className="text-[10px] text-neutral-600 flex gap-1.5 font-medium">
-                            <span className="bg-blue-50 text-blue-800 px-1 rounded font-bold">
+                          <div className="text-[10px] flex gap-1.5 font-medium tabular-nums">
+                            <span className="bg-[#EBF5FF] text-[#0854A0] border border-[#B8DCFF] px-1.5 rounded font-bold">
                               {slip.totalQty} Qty
                             </span>
-                            <span className="bg-amber-50 text-amber-900 px-1 rounded font-bold">
+                            <span className="bg-[#FEF7F1] text-[#A64B00] border border-[#F9C99B] px-1.5 rounded font-bold">
                               {slip.totalPallets} Pallets
                             </span>
-                            <span className="bg-indigo-50 text-indigo-900 px-1 rounded font-bold">
+                            <span className="bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4] px-1.5 rounded font-bold">
                               {slip.totalLooseRolls} Loose
                             </span>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-blue-600 font-semibold block">DN Assigned</span>
+                          <span className="text-[10px] text-[#0A6ED1] font-semibold block">DN Assigned</span>
                         )}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-neutral-400 italic">No slip created</span>
+                      <span className="text-[11px] text-[#7A8FA3] italic">No slip created</span>
                     )}
                   </td>
 
                   {/* Time */}
-                  <td className="py-3 px-3 text-[11px]">
-                    <div className="text-neutral-600">
-                      <span className="font-semibold text-neutral-800">In:</span> {t.timeIn}
+                  <td className="py-3 px-3 text-[11px] tabular-nums">
+                    <div className="text-[#475E75]">
+                      <span className="font-semibold text-[#1C2833]">In:</span> {t.timeIn}
                     </div>
                     {t.status === 'waiting' && t.createdAt && !t.manualStatusOverride && !t.autoUnderLoadingApplied && (() => {
                       const targetAt = t.autoUnderLoadingAt || (t.createdAt + (t.autoLoadingMinutes || 30) * 60 * 1000);
                       const remainingMin = Math.max(0, Math.ceil((targetAt - nowMs) / 60000));
                       return (
-                        <div className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                        <div className="text-[10px] text-[#C25900] font-semibold mt-0.5">
                           {remainingMin > 0 ? `Auto Loading in ${remainingMin}m` : 'Auto Loading soon...'}
                         </div>
                       );
                     })()}
                     {t.timeLoadingStarted && (
-                      <div className="text-amber-700 font-semibold mt-0.5">
+                      <div className="text-[#C25900] font-semibold mt-0.5">
                         <span>Load:</span> {t.timeLoadingStarted}
                         {t.autoUnderLoadingApplied && !t.manualStatusOverride && (
-                          <span className="ml-1 text-[9.5px] bg-amber-100 text-amber-800 px-1 rounded font-bold">
+                          <span className="ml-1 text-[9.5px] bg-[#FEF7F1] text-[#A64B00] border border-[#F9C99B] px-1 rounded font-bold">
                             Auto
                           </span>
                         )}
                       </div>
                     )}
                     {t.timeCompleted && (
-                      <div className="text-emerald-700 font-bold mt-0.5">
+                      <div className="text-[#107E3E] font-bold mt-0.5">
                         <span>Done:</span> {t.timeCompleted}
                       </div>
                     )}
@@ -289,7 +284,7 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                       <button
                         type="button"
                         onClick={() => onOpenWhatsApp(t)}
-                        className="app-btn-sm bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                        className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white shadow-xs"
                         title="Send WhatsApp Alert to Driver"
                       >
                         <MessageSquare className="w-3.5 h-3.5 shrink-0" />
@@ -301,7 +296,7 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onOpenLoadingSlip(t)}
-                          className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white shadow-sm"
+                          className="app-btn-sm bg-[#0A6ED1] hover:bg-[#085CAF] text-white shadow-xs"
                           title="Generate or edit 8-row loading slip"
                         >
                           <FileText className="w-3.5 h-3.5 shrink-0" />
@@ -314,10 +309,10 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                         <button
                           type="button"
                           onClick={() => onPrintLoadingSlip(t)}
-                          className="app-btn-sm bg-neutral-800 hover:bg-neutral-900 text-white shadow-sm"
+                          className="app-btn-sm bg-[#354A5F] hover:bg-[#243647] text-white shadow-xs"
                           title="Print 2-Copy A4 Single Sheet Preview"
                         >
-                          <Printer className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                          <Printer className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
                           <span>Print Slip</span>
                         </button>
                       )}
@@ -330,7 +325,7 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                             e.stopPropagation();
                             onDeleteTicket(t.id);
                           }}
-                          className="app-btn-sm bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 hover:border-red-600 shadow-sm"
+                          className="app-btn-sm bg-[#FFF0F0] hover:bg-[#BB0000] text-[#BB0000] hover:text-white border border-[#F4B8B8] hover:border-[#BB0000] shadow-xs"
                           title={`Delete Ticket #${t.sequenceNumber} (${t.truckNumber})`}
                         >
                           <Trash2 className="w-3.5 h-3.5 shrink-0" />

@@ -73,15 +73,24 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
       {/* Header */}
       <div>
         <div className="flex justify-between items-start border-b border-black pb-1 mb-1">
-          <div>
-            <h1 className="text-sm font-black uppercase tracking-wide text-black">
-              {settings.companyName}
-            </h1>
-            <p className="text-[9.5px] text-gray-700 font-medium">
-              {settings.address} | Ph: {settings.phone} | GSTIN: {settings.gstin}
-            </p>
+          <div className="flex items-center gap-2 min-w-0">
+            {settings.logoDataUrl && (
+              <img
+                src={settings.logoDataUrl}
+                alt={settings.companyName}
+                className="h-9 w-9 object-contain shrink-0 bg-white"
+              />
+            )}
+            <div className="min-w-0">
+              <h1 className="text-sm font-black uppercase tracking-wide text-black">
+                {settings.companyName}
+              </h1>
+              <p className="text-[9.5px] text-gray-700 font-medium">
+                {settings.address} | Ph: {settings.phone} | GSTIN: {settings.gstin}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <span className="inline-block border border-black px-1.5 py-0.5 text-[9px] font-bold uppercase bg-gray-100">
               {copyType}
             </span>

@@ -1,11 +1,39 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-[#F3F6FA] text-[#1C2833] selection:bg-[#0A6ED1] selection:text-white;
+  }
+
+  input:not([type='password']):not([type='date']):not([type='time']):not([type='number']):not([type='checkbox']):not([type='radio']):not([type='file']):not([readonly]):not([disabled]):not([data-preserve-case='true']),
+  textarea:not([readonly]):not([disabled]):not([data-preserve-case='true']) {
+    text-transform: uppercase;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    text-transform: none !important;
+  }
+
+  input[type='password'],
+  input[data-preserve-case='true'],
+  textarea[data-preserve-case='true'],
+  [data-preserve-case='true'] {
+    text-transform: none !important;
+  }
+}
+
 @layer components {
   .app-btn {
-    @apply inline-flex items-center justify-center gap-1.5 h-9 min-h-[36px] px-3.5 rounded-xl text-xs font-bold leading-none whitespace-nowrap select-none transition active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0;
+    @apply inline-flex items-center justify-center gap-1.5 h-9 min-h-[36px] px-3.5 rounded-lg text-xs font-bold leading-none whitespace-nowrap select-none transition duration-150 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED1];
   }
 
   .app-btn-sm {
-    @apply inline-flex items-center justify-center gap-1.5 h-8 min-h-[32px] px-2.5 rounded-lg text-[11px] font-bold leading-none whitespace-nowrap select-none transition active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0;
+    @apply inline-flex items-center justify-center gap-1.5 h-8 min-h-[32px] px-2.5 rounded-md text-[11px] font-bold leading-none whitespace-nowrap select-none transition duration-150 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A6ED1];
   }
 }
