@@ -78,6 +78,7 @@ export interface TicketRecord {
   version?: number;
   createdBy?: string;
   updatedBy?: string;
+  driverStatusToken?: string;
 }
 
 export interface DriverMasterRecord {
@@ -271,3 +272,120 @@ export interface ExFactoryEntry {
   createdAt: number;
   updatedAt: number;
 }
+
+export interface DriverLiveStatusResponse {
+  found: boolean;
+  expired: boolean;
+  expiredAt?: number;
+  expiresAt?: number;
+  remainingMs?: number;
+  serverTimeMs: number;
+  message?: string;
+  branding?: PublicBranding;
+  ticket?: {
+    id: string;
+    ticketNumber: string;
+    delNoteNumber?: string;
+    sequenceNumber: number;
+    gateNumber: string;
+    gateSequenceNumber: number;
+    date: string;
+    timeIn: string;
+    timeCalled?: string;
+    timeLoadingStarted?: string;
+    timeCompleted?: string;
+    truckNumber: string;
+    driverName: string;
+    driverPhone: string;
+    destinationPlace?: string;
+    transporterName?: string;
+    status: TruckStatus;
+    priority?: 'normal' | 'urgent';
+    createdAt: number;
+    hasLoadingSlip: boolean;
+    slipLocked: boolean;
+  };
+  queue?: {
+    gateNumber: string;
+    trucksAhead: number;
+    queuePosition: number;
+    totalActiveAtGate: number;
+    currentlyLoadingTruck: string | null;
+    nextCalledTruck: string | null;
+    waitingCount: number;
+    calledCount: number;
+    underLoadingCount: number;
+  };
+}
+
+export interface WhatsAppNotificationLog {
+  id: string;
+  ticketId: string;
+  ticketNumber: string;
+  driverName: string;
+  driverMobile: string;
+  delNoteNumber: string;
+  truckNumber: string;
+  gateNumber: string;
+  queueNumber: number;
+  messageType: string;
+  deliveryStatus: 'sent' | 'failed' | 'skipped';
+  whatsappMessageId: string;
+  errorMessage: string;
+  driverStatusToken: string;
+  messageBody: string;
+  attemptCount: number;
+  createdAt: number;
+  sentAt: number | null;
+  updatedAt: number;
+}
+
+export interface WhatsAppDispatchOutcome {
+  triggered: boolean;
+  duplicatePrevented: boolean;
+  deliveryStatus: 'sent' | 'failed' | 'skipped';
+  whatsappMessageId?: string;
+  driverMobile?: string;
+  liveStatusUrl: string;
+  driverStatusToken: string;
+  queueNumber: number;
+  gateNumber: string;
+  warning?: string;
+  errorMessage?: string;
+  log?: WhatsAppNotificationLog;
+}
+
+export interface DriverTokenStatusResponse {
+  found: boolean;
+  expired: boolean;
+  expiredAt?: number;
+  expiresAt?: number;
+  remainingMs?: number;
+  serverTimeMs: number;
+  message?: string;
+  branding?: PublicBranding;
+  slip?: {
+    delNoteNumber: string;
+    truckNumber: string;
+    gateNumber: string;
+    queueNumber: number;
+    queuePosition: number;
+    trucksAhead: number;
+    totalActiveAtGate: number;
+    currentlyLoadingTruck: string | null;
+    destinationPlace?: string;
+    status: TruckStatus;
+    statusLabel: string;
+    progressPercent: number;
+    stepIndex: number;
+    totalItemsCount: number;
+    loadedItemsCount: number;
+    timeIn?: string;
+    timeCalled?: string;
+    timeLoadingStarted?: string;
+    timeCompleted?: string;
+    lastUpdatedAt: number;
+  };
+}
+
+

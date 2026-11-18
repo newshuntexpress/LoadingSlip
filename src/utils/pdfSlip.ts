@@ -1,8 +1,10 @@
 import { jsPDF } from 'jspdf';
+import QRCode from 'qrcode';
 import { TicketRecord, CompanySettings } from '../types';
 import { formatSaudiPhoneNumber } from './whatsapp';
 import { formatDisplayDate } from '../services/storage';
 import { drawPdfLogo } from './logo';
+import { buildDriverLiveStatusUrl } from './driverStatusUrl';
 
 function truncateText(doc: jsPDF, text: string, maxWidth: number): string {
   const str = String(text || '');
@@ -30,6 +32,39 @@ function drawDashedLine(doc: jsPDF, x1: number, y1: number, x2: number, y2: numb
     if (start < totalLen) {
       doc.line(x1 + ux * start, y1 + uy * start, x1 + ux * end, y1 + uy * end);
     }
+  }
+}
+
+function drawPdfQrCode(doc: jsPDF, url: string, x: number, y: number, sizeMm: number): void {
+  if (!url) return;
+  try {
+    const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
+    const count = qr.modules.size;
+    if (!count) return;
+    const quietModules = 2;
+    const totalModules = count + quietModules * 2;
+    const cell = sizeMm / totalModules;
+
+    // Crisp pure-white quiet-zone backing
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x, y, sizeMm, sizeMm, 'F');
+
+    doc.setFillColor(0, 0, 0);
+    for (let r = 0; r < count; r++) {
+      for (let c = 0; c < count; c++) {
+        if (qr.modules.get(r, c)) {
+          doc.rect(
+            x + (c + quietModules) * cell,
+            y + (r + quietModules) * cell,
+            cell + 0.02,
+            cell + 0.02,
+            'F'
+          );
+        }
+      }
+    }
+  } catch {
+    // Skip QR rendering on unexpected input failure
   }
 }
 
@@ -364,37 +399,67 @@ function drawSingleSlipCopy(
   doc.text(String(slip?.totalPallets || 0), palletsX + tCols[4] / 2, curY + 4.5, { align: 'center' });
   doc.text(String(slip?.totalLooseRolls || 0), looseX + tCols[5] / 2, curY + 4.5, { align: 'center' });
 
-  // Footer Signatures
-  const sigTopY = yStart + outerH - 22;
+  // Footer Live Status QR (Left) + Signatures
+  const sigTopY = yStart + outerH - 23;
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
   doc.line(innerX, sigTopY, innerX + innerW, sigTopY);
 
-  const boxY = sigTopY + 2;
-  const boxW = (innerW - 6) / 2;
-  const boxH = 17;
+  const boxY = sigTopY + 1.8;
+  const qrBoxW = 46;
+  const boxW = 70; // 46 + 3 + 70 + 3 + 70 = 192mm
+  const boxH = 19.5;
 
-  // Box 1: Forklift Operator / Loaded By
+  // Box 1 (Left): Driver Live Loading Status QR Pass
+  const qrBoxX = innerX;
+  const liveStatusUrl = buildDriverLiveStatusUrl(ticket);
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.35);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(qrBoxX, boxY, qrBoxW, boxH, 1, 1, 'FD');
+
+  const qrSizeMm = 17.5;
+  drawPdfQrCode(doc, liveStatusUrl, qrBoxX + 1.2, boxY + 1, qrSizeMm);
+
+  const qrTextX = qrBoxX + qrSizeMm + 2.5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.4);
+  doc.setTextColor(0, 0, 0);
+  doc.text('LIVE STATUS QR', qrTextX, boxY + 5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.5);
+  doc.setTextColor(55, 65, 81);
+  doc.text('Scan at Gate for', qrTextX, boxY + 8.6);
+  doc.text('Queue & Status', qrTextX, boxY + 11.6);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.2);
+  doc.setTextColor(0, 0, 0);
+  doc.text(truncateText(doc, ticket.gateNumber || 'Gate', qrBoxW - qrSizeMm - 3.5), qrTextX, boxY + 16.5);
+
+  // Box 2 (Middle): Forklift Operator / Loaded By
+  const box1X = qrBoxX + qrBoxW + 3;
   doc.setDrawColor(120, 120, 120);
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(innerX, boxY, boxW, boxH, 1, 1, 'FD');
+  doc.roundedRect(box1X, boxY, boxW, boxH, 1, 1, 'FD');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(31, 41, 55);
-  doc.text('Forklift Operator / Loaded By', innerX + boxW / 2, boxY + 4, { align: 'center' });
+  doc.text('Forklift Operator / Loaded By', box1X + boxW / 2, boxY + 4, { align: 'center' });
 
   if (slip?.checkedBy) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.2);
     doc.setTextColor(0, 0, 0);
-    doc.text(truncateText(doc, slip.checkedBy, boxW - 8), innerX + boxW / 2, boxY + 12, { align: 'center' });
+    doc.text(truncateText(doc, slip.checkedBy, boxW - 8), box1X + boxW / 2, boxY + 13.5, { align: 'center' });
   }
   doc.setDrawColor(156, 163, 175);
   doc.setLineWidth(0.25);
-  drawDashedLine(doc, innerX + 3, boxY + 14.2, innerX + boxW - 3, boxY + 14.2, 1.5, 1.2);
+  drawDashedLine(doc, box1X + 3, boxY + 16, box1X + boxW - 3, boxY + 16, 1.5, 1.2);
 
-  // Box 2: Store Incharge Signature
-  const box2X = innerX + boxW + 6;
+  // Box 3 (Right): Store Incharge Signature
+  const box2X = box1X + boxW + 3;
   const inchargeFullName = (storeInchargeFullName || slip?.storeInchargeName || '').trim();
   doc.setDrawColor(120, 120, 120);
   doc.setFillColor(255, 255, 255);
@@ -402,11 +467,11 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(31, 41, 55);
-  doc.text('Store Incharge Signature', box2X + boxW / 2, boxY + 3.8, { align: 'center' });
+  doc.text('Store Incharge Signature', box2X + boxW / 2, boxY + 4, { align: 'center' });
 
   doc.setDrawColor(156, 163, 175);
   doc.setLineWidth(0.25);
-  drawDashedLine(doc, box2X + 3, boxY + 11.2, box2X + boxW - 3, boxY + 11.2, 1.5, 1.2);
+  drawDashedLine(doc, box2X + 3, boxY + 12.5, box2X + boxW - 3, boxY + 12.5, 1.5, 1.2);
 
   if (inchargeFullName) {
     // Fit complete full name without truncation/shortening
@@ -418,7 +483,7 @@ function drawSingleSlipCopy(
       doc.setFontSize(nameFontSize);
     }
     doc.setTextColor(0, 0, 0);
-    doc.text(inchargeFullName, box2X + boxW / 2, boxY + 15.2, { align: 'center' });
+    doc.text(inchargeFullName, box2X + boxW / 2, boxY + 16.8, { align: 'center' });
   }
 }
 

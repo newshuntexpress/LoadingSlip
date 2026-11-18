@@ -23,7 +23,9 @@
   input[type='password'],
   input[data-preserve-case='true'],
   textarea[data-preserve-case='true'],
-  [data-preserve-case='true'] {
+  [data-preserve-case='true'],
+  [data-preserve-case='true'] input,
+  [data-preserve-case='true'] textarea {
     text-transform: none !important;
   }
 }

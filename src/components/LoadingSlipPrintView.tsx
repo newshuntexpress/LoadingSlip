@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { TicketRecord, CompanySettings } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import { formatDisplayDate } from '../services/storage';
 import { generateLoadingSlipPDF } from '../utils/pdfSlip';
+import { buildDriverLiveStatusUrl, generateQrPngDataUrl } from '../utils/driverStatusUrl';
 import { Printer, Download, X, Scissors, CheckCircle2 } from 'lucide-react';
 
 interface LoadingSlipPrintViewProps {
@@ -37,6 +38,22 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
 
   const printSheetRef = useRef<HTMLDivElement>(null);
   const [pdfNotice, setPdfNotice] = useState<string | null>(null);
+  const liveStatusUrl = buildDriverLiveStatusUrl(ticket);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    generateQrPngDataUrl(liveStatusUrl, 360)
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveStatusUrl]);
 
   const handleSavePDF = () => {
     generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName);
@@ -246,22 +263,41 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
         </table>
       </div>
 
-      {/* Footer Signatures */}
+      {/* Footer Live Status QR (Left) + Signatures */}
       <div className="mt-1 pt-1 border-t border-black">
-        <div className="grid grid-cols-2 gap-3 text-center text-[9.5px]">
-          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[48px]">
+        <div className="grid grid-cols-[auto_1fr_1fr] gap-2 text-center text-[9.5px] items-stretch">
+          <div className="border border-black rounded bg-white px-1.5 py-1 flex items-center gap-1.5 min-h-[60px] shrink-0">
+            <div className="w-[56px] h-[56px] bg-white border border-gray-200 flex items-center justify-center shrink-0">
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt={`Live Status QR for ${ticket.truckNumber}`}
+                  className="w-full h-full object-contain block"
+                />
+              ) : (
+                <span className="text-[7px] text-gray-500 font-bold">QR</span>
+              )}
+            </div>
+            <div className="text-left w-[72px] leading-tight">
+              <p className="text-[8px] font-black uppercase text-black tracking-tight">LIVE STATUS QR</p>
+              <p className="text-[7px] text-gray-700 font-medium mt-0.5">Scan at Gate for</p>
+              <p className="text-[7px] text-gray-700 font-medium">Queue &amp; Status</p>
+              <p className="text-[8px] font-extrabold text-black mt-1 truncate">{ticket.gateNumber}</p>
+            </div>
+          </div>
+          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[60px]">
             <p className="font-bold text-gray-800">Forklift Operator / Loaded By</p>
             <div>
-              <div className="h-5 flex items-end justify-center font-medium text-gray-900 text-[9px]">
+              <div className="h-6 flex items-end justify-center font-medium text-gray-900 text-[9px]">
                 {slip?.checkedBy ? slip.checkedBy : ''}
               </div>
               <div className="border-t border-dashed border-gray-400"></div>
             </div>
           </div>
-          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[48px]">
+          <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[60px]">
             <p className="font-bold text-gray-800">Store Incharge Signature</p>
             <div>
-              <div className="h-3.5"></div>
+              <div className="h-4"></div>
               <div className="border-t border-dashed border-gray-400 pt-0.5 min-h-[14px] flex items-center justify-center">
                 {displayStoreInchargeName ? (
                   <span className="font-bold text-black text-[10px] leading-tight">

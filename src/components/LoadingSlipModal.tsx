@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TicketRecord, LoadingSlipData, LoadingSlipItem, CompanySettings } from '../types';
 import { createEmpty8Rows, getCurrentTimeString } from '../services/storage';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { FileText, Save, Printer, X, Trash2, AlertCircle } from 'lucide-react';
+import { buildDriverLiveStatusUrl, generateQrPngDataUrl } from '../utils/driverStatusUrl';
+import { FileText, Save, Printer, X, Trash2, AlertCircle, Clock, QrCode, Maximize2 } from 'lucide-react';
 
 export const PACK_DROPDOWN_OPTIONS = [
   'Can',
@@ -50,6 +51,27 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   const [checkedBy, setCheckedBy] = useState<string>(existingSlip?.checkedBy || '');
   const [markCompleteOnSave, setMarkCompleteOnSave] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [qrEnlarged, setQrEnlarged] = useState<boolean>(false);
+
+  const liveStatusUrl = buildDriverLiveStatusUrl({
+    driverStatusToken: ticket.driverStatusToken,
+    truckNumber,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    generateQrPngDataUrl(liveStatusUrl, 360)
+      .then((dataUrl) => {
+        if (!cancelled) setQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setQrDataUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveStatusUrl]);
 
   // Initialize 8 rows
   const [items, setItems] = useState<LoadingSlipItem[]>(() => {
@@ -237,7 +259,19 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
     const updatedSlip = buildSlipData();
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
     const nowTime = getCurrentTimeString();
-    const nextStatus = markCompleteOnSave ? 'completed' : 'under_loading';
+    const hasExistingSlip = Boolean(
+      existingSlip &&
+        (String(existingSlip.delNoteNumber || '').trim() ||
+          (Array.isArray(existingSlip.items) &&
+            existingSlip.items.some(
+              (it) => String(it?.description || '').trim() || String(it?.qty || '').trim()
+            )))
+    );
+    const nextStatus = markCompleteOnSave
+      ? 'completed'
+      : hasExistingSlip
+      ? ticket.status
+      : 'waiting';
     const updatedTicket: TicketRecord = {
       ...ticket,
       truckNumber: truckNumber.trim().toUpperCase(),
@@ -247,9 +281,12 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       destinationPlace: placeName.trim().toUpperCase(),
       loadingSlip: updatedSlip,
       status: nextStatus,
-      timeLoadingStarted: ticket.timeLoadingStarted || nowTime,
+      timeLoadingStarted:
+        nextStatus === 'waiting'
+          ? ticket.timeLoadingStarted
+          : ticket.timeLoadingStarted || nowTime,
       timeCompleted: markCompleteOnSave ? (ticket.timeCompleted || nowTime) : undefined,
-      manualStatusOverride: true,
+      manualStatusOverride: markCompleteOnSave ? true : ticket.manualStatusOverride,
     };
 
     onSave(updatedTicket, printDirectly);
@@ -595,8 +632,48 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
             </div>
           </div>
 
-          {/* Signatures & Operator details */}
-          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Live Status QR Pass (Left) + Signatures & Operator Details */}
+          <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200 grid grid-cols-1 md:grid-cols-[auto_1fr_1fr] gap-3 items-center">
+            <div className="flex items-center gap-2.5 bg-white border border-neutral-300 rounded-xl px-2.5 py-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => qrDataUrl && setQrEnlarged(true)}
+                disabled={!qrDataUrl}
+                title="Enlarge Live Loading Status QR Code"
+                className="w-14 h-14 rounded-lg border border-neutral-300 bg-white p-0.5 flex items-center justify-center shrink-0 cursor-pointer hover:border-blue-600 transition disabled:cursor-default"
+              >
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`Live status QR for ${truckNumber || ticket.truckNumber}`}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <QrCode className="w-6 h-6 text-neutral-400" />
+                )}
+              </button>
+              <div className="min-w-0 max-w-[175px]">
+                <div className="flex items-center gap-1 text-[11px] font-black text-neutral-900">
+                  <QrCode className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                  <span>Live Status QR</span>
+                </div>
+                <p className="text-[10px] text-neutral-600 leading-snug mt-0.5">
+                  {ticket.driverStatusToken
+                    ? 'Same QR prints on both A4 slip copies for Gate Guard scan.'
+                    : 'Unique slip QR prints on both A4 copies once saved.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => qrDataUrl && setQrEnlarged(true)}
+                  disabled={!qrDataUrl}
+                  className="mt-1 text-[10.5px] font-bold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                >
+                  <Maximize2 className="w-3 h-3 shrink-0" />
+                  <span>Enlarge QR</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-neutral-700 block mb-1">
                 Forklift Operator / Loaded By
@@ -630,10 +707,18 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                 </div>
               )}
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
-                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                <Clock className="w-4 h-4 text-amber-700 shrink-0" />
                 <span>
-                  Saving this loading slip will automatically set the ticket status to{' '}
-                  <strong className="font-extrabold">Under Loading</strong>.
+                  {!existingSlip ? (
+                    <>
+                      Generating this loading slip keeps the status as{' '}
+                      <strong className="font-extrabold">Waiting in Queue</strong> and automatically sends a WhatsApp message with the live queue link to the driver.
+                    </>
+                  ) : (
+                    <>
+                      Saving updates the loading slip materials while preserving the current queue progress and preventing duplicate WhatsApp messages.
+                    </>
+                  )}
                 </span>
               </div>
               <label className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
@@ -644,7 +729,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                   className="w-4 h-4 text-emerald-600 rounded border-neutral-300 focus:ring-emerald-500"
                 />
                 <span className="text-xs text-neutral-800">
-                  <span className="font-bold text-emerald-800">Mark as Completed (Optional):</span> Change vehicle status to 'Completed' upon saving instead of 'Under Loading'.
+                  <span className="font-bold text-emerald-800">Mark as Completed (Optional):</span> Change vehicle status to &apos;Completed&apos; immediately upon saving instead of &apos;Waiting in Queue&apos;.
                 </span>
               </label>
             </div>
@@ -684,6 +769,48 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
           </div>
         </div>
       </div>
+
+      {qrEnlarged && qrDataUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Loading Slip Live Status QR Code"
+          className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setQrEnlarged(false)}
+        >
+          <div
+            className="w-full max-w-xs bg-white rounded-2xl border border-neutral-200 p-5 shadow-2xl space-y-3 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-left">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-500">
+                  Gate Guard Scan QR
+                </p>
+                <p className="text-sm font-black text-neutral-900">{truckNumber || ticket.truckNumber}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQrEnlarged(false)}
+                aria-label="Close QR preview"
+                className="min-h-[40px] min-w-[40px] rounded-xl bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="w-56 h-56 mx-auto bg-white border-2 border-neutral-900 rounded-xl p-2 flex items-center justify-center">
+              <img
+                src={qrDataUrl}
+                alt={`Full-size QR code for ${truckNumber || ticket.truckNumber}`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <p className="text-[11px] font-mono text-neutral-500 truncate" title={liveStatusUrl}>
+              {liveStatusUrl}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

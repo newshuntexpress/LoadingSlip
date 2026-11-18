@@ -21,6 +21,9 @@ import { DriverMasterModal } from './components/DriverMasterModal';
 import { DailyReportModal } from './components/DailyReportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { LoginView } from './components/LoginView';
+import { DriverStatusView } from './components/DriverStatusView';
+import { DriverTokenStatusPage } from './components/DriverTokenStatusPage';
+import { WhatsAppLogsModal } from './components/WhatsAppLogsModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import {
@@ -47,6 +50,9 @@ import {
   Printer,
   Droplets,
   Truck,
+  MessageSquare,
+  Send,
+  ExternalLink,
 } from 'lucide-react';
 
 export default function App() {
@@ -56,6 +62,24 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [driverStatusToken] = useState<string | null>(() => {
+    try {
+      const match = window.location.pathname.match(/^\/driver-loading-status\/([A-Za-z0-9_-]{16,128})\/?$/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  });
+  const [showDriverStatusView, setShowDriverStatusView] = useState<boolean>(() => {
+    try {
+      const hash = window.location.hash.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      const params = new URLSearchParams(window.location.search);
+      return hash.startsWith('#driver-status') || path === '/driver-status' || params.get('driver') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   // App Data State
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
@@ -83,6 +107,17 @@ export default function App() {
   const [showDriverMasterModal, setShowDriverMasterModal] = useState(false);
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showWhatsAppLogsModal, setShowWhatsAppLogsModal] = useState(false);
+  const [waPendingRetryCount, setWaPendingRetryCount] = useState(0);
+  const [waToast, setWaToast] = useState<{
+    type: 'sent' | 'failed' | 'skipped';
+    ticketId: string;
+    ticketNumber: string;
+    truckNumber: string;
+    message: string;
+    liveStatusUrl?: string;
+    retrying?: boolean;
+  } | null>(null);
 
   // Deleted Ticket Undo Toast State
   const [deletedToast, setDeletedToast] = useState<{
@@ -193,6 +228,9 @@ export default function App() {
     setShowDriverMasterModal(false);
     setShowDailyReportModal(false);
     setShowSettingsModal(false);
+    setShowWhatsAppLogsModal(false);
+    setWaPendingRetryCount(0);
+    setWaToast(null);
     setShowAdminModal(false);
     setShowChangePasswordModal(false);
     setDeletedToast(null);
@@ -220,13 +258,16 @@ export default function App() {
         userPerms.includes('ex_factory.update'));
 
     try {
-      const [ticketsRes, driversRes, settingsRes, alertsRes] = await Promise.all([
+      const [ticketsRes, driversRes, settingsRes, alertsRes, waLogsRes] = await Promise.all([
         userCanFetchTickets ? ApiClient.getTickets() : Promise.resolve([] as TicketRecord[]),
         userCanFetchDrivers ? ApiClient.getDrivers() : Promise.resolve([]),
         ApiClient.getSettings(),
         !forkliftOnly && userCanViewTickets
           ? ApiClient.getLoadingAlerts().catch(() => [] as LoadingAlertNotification[])
           : Promise.resolve([] as LoadingAlertNotification[]),
+        !forkliftOnly && userCanViewTickets
+          ? ApiClient.getWhatsAppLogs().catch(() => [])
+          : Promise.resolve([]),
       ]);
       StorageService.hydrateFromServer({
         tickets: ticketsRes,
@@ -236,6 +277,9 @@ export default function App() {
       });
       setTickets(ticketsRes);
       setLoadingAlerts(alertsRes);
+      setWaPendingRetryCount(
+        waLogsRes.filter((l) => l.deliveryStatus === 'failed' || l.deliveryStatus === 'skipped').length
+      );
       setSettings(StorageService.getSettings());
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 403 && err.code === 'PASSWORD_CHANGE_REQUIRED') {
@@ -455,6 +499,11 @@ export default function App() {
     }
   };
 
+  // Public tokenized Driver Live Loading Status link from WhatsApp (no login required)
+  if (driverStatusToken) {
+    return <DriverTokenStatusPage token={driverStatusToken} initialBranding={publicBranding} />;
+  }
+
   // Show boot spinner while checking session cookie
   if (authLoading) {
     return (
@@ -465,13 +514,33 @@ export default function App() {
     );
   }
 
-  // Gate 1: Unauthenticated -> Login Page (or First-Time Admin Setup)
+  // Gate 1: Unauthenticated -> Driver Live Status Screen or Login Page
   if (!currentUser) {
+    if (showDriverStatusView && !needsSetup) {
+      return (
+        <DriverStatusView
+          branding={publicBranding}
+          backLabel="Staff Login"
+          onBack={() => {
+            setShowDriverStatusView(false);
+            if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
+              window.history.replaceState(null, '', '/');
+            }
+          }}
+        />
+      );
+    }
+
     return (
       <LoginView
         needsSetup={needsSetup}
         branding={publicBranding}
+        onOpenDriverStatus={() => {
+          setShowDriverStatusView(true);
+          window.history.replaceState(null, '', '/#driver-status');
+        }}
         onAuthenticated={(user) => {
+          setShowDriverStatusView(false);
           setNeedsSetup(false);
           setAppError(null);
           setCurrentUser(user);
@@ -555,6 +624,26 @@ export default function App() {
           onLogout={handleLogout}
         />
       </div>
+    );
+  }
+
+  // Optional Driver Live Loading Status screen preview for dispatchers/admins
+  if (showDriverStatusView && !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly) {
+    return (
+      <DriverStatusView
+        branding={{
+          companyName: settings.companyName,
+          companySubtitle: settings.companySubtitle,
+          logoDataUrl: settings.logoDataUrl,
+        }}
+        backLabel="Back to Dispatch"
+        onBack={() => {
+          setShowDriverStatusView(false);
+          if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
+            window.history.replaceState(null, '', '/');
+          }
+        }}
+      />
     );
   }
 
@@ -662,19 +751,89 @@ export default function App() {
     }
   };
 
-  // Save loading slip handler
+  // Save loading slip handler (auto-triggers WhatsApp notification on newly generated slip)
   const handleSaveLoadingSlip = async (updatedTicket: TicketRecord, openPrintDirectly?: boolean) => {
     setAppError(null);
     try {
-      const saved = await ApiClient.updateTicket(updatedTicket.id, updatedTicket);
+      const { ticket: saved, whatsappNotification } = await ApiClient.updateTicketWithNotification(
+        updatedTicket.id,
+        updatedTicket
+      );
       setActiveTicketForSlip(null);
       await loadData();
+
+      if (whatsappNotification && whatsappNotification.triggered) {
+        if (whatsappNotification.deliveryStatus === 'sent') {
+          setWaToast({
+            type: 'sent',
+            ticketId: saved.id,
+            ticketNumber: saved.ticketNumber,
+            truckNumber: saved.truckNumber,
+            message: `Auto WhatsApp sent to ${whatsappNotification.driverMobile} (${whatsappNotification.gateNumber} · Queue #${whatsappNotification.queueNumber}).`,
+            liveStatusUrl: whatsappNotification.liveStatusUrl,
+          });
+        } else {
+          setWaToast({
+            type: whatsappNotification.deliveryStatus,
+            ticketId: saved.id,
+            ticketNumber: saved.ticketNumber,
+            truckNumber: saved.truckNumber,
+            message:
+              whatsappNotification.warning ||
+              whatsappNotification.errorMessage ||
+              'Loading slip saved, but automatic WhatsApp delivery did not complete.',
+            liveStatusUrl: whatsappNotification.liveStatusUrl,
+          });
+        }
+      }
+
       if (openPrintDirectly) {
         setActiveTicketForPrintSlip(saved);
       }
     } catch (err: any) {
       await loadData();
       setAppError(err?.message || 'Failed to save loading slip.');
+    }
+  };
+
+  const handleRetryWhatsAppToast = async () => {
+    if (!waToast || waToast.type === 'sent' || waToast.retrying) return;
+    setWaToast((prev) => (prev ? { ...prev, retrying: true } : null));
+    try {
+      const { outcome } = await ApiClient.retryWhatsAppNotification(waToast.ticketId);
+      await loadData();
+      if (outcome.deliveryStatus === 'sent') {
+        setWaToast({
+          type: 'sent',
+          ticketId: waToast.ticketId,
+          ticketNumber: waToast.ticketNumber,
+          truckNumber: waToast.truckNumber,
+          message: `WhatsApp delivered to ${outcome.driverMobile} (${outcome.gateNumber} · Queue #${outcome.queueNumber}).`,
+          liveStatusUrl: outcome.liveStatusUrl,
+        });
+      } else {
+        setWaToast((prev) =>
+          prev
+            ? {
+                ...prev,
+                type: outcome.deliveryStatus,
+                message: outcome.warning || outcome.errorMessage || 'WhatsApp retry failed.',
+                retrying: false,
+              }
+            : null
+        );
+      }
+    } catch (err: any) {
+      setWaToast((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: err?.message || 'Failed to retry WhatsApp message.',
+              retrying: false,
+            }
+          : null
+      );
+      await loadData();
     }
   };
 
@@ -897,6 +1056,40 @@ export default function App() {
                   </button>
                 )}
 
+                {/* Driver Status Live Screen */}
+                {canViewTickets && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDriverStatusView(true);
+                      window.history.replaceState(null, '', '/#driver-status');
+                    }}
+                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
+                    title="Driver Live Loading Status Screen (12-Hour Lookup)"
+                  >
+                    <Truck className="w-4 h-4 text-[#F0AB00] shrink-0" />
+                    <span>Driver Status</span>
+                  </button>
+                )}
+
+                {/* WhatsApp Notification Logs & Retry Queue */}
+                {canViewTickets && (
+                  <button
+                    type="button"
+                    onClick={() => setShowWhatsAppLogsModal(true)}
+                    className="app-btn w-full sm:w-auto sm:min-w-[128px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
+                    title="Automatic WhatsApp Notification Logs & Retry"
+                  >
+                    <MessageSquare className="w-4 h-4 text-[#68D391] shrink-0" />
+                    <span>WA Logs</span>
+                    {waPendingRetryCount > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
+                        {waPendingRetryCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
                 {/* Plant Settings (Admin only) */}
                 {canManageSettings && (
                   <button
@@ -945,6 +1138,73 @@ export default function App() {
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {/* Automatic WhatsApp Notification Status & Retry Banner */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && waToast && (
+          <div
+            role="status"
+            className={`px-4 py-3 rounded-xl border text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs ${
+              waToast.type === 'sent'
+                ? 'bg-[#F1FDF6] border-[#72C896] text-[#0D4A26]'
+                : waToast.type === 'skipped'
+                ? 'bg-[#FFFBEB] border-[#F3CC60] text-[#854D0E]'
+                : 'bg-[#FFF0F0] border-[#F4B8B8] text-[#BB0000]'
+            }`}
+          >
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+              <MessageSquare className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0">
+                <p className="font-bold">
+                  {waToast.truckNumber} ({waToast.ticketNumber}) — {waToast.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {waToast.liveStatusUrl && (
+                <a
+                  href={waToast.liveStatusUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="app-btn-sm bg-white hover:bg-[#EFF4F9] text-[#0A6ED1] border border-[#B8DCFF]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  <span>Open Driver Link</span>
+                </a>
+              )}
+              {waToast.type !== 'sent' && canUpdateTickets && (
+                <button
+                  type="button"
+                  onClick={handleRetryWhatsAppToast}
+                  disabled={waToast.retrying}
+                  className="app-btn-sm bg-[#0A6ED1] hover:bg-[#085CAF] text-white disabled:opacity-60"
+                >
+                  {waToast.retrying ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span>Retry WhatsApp Message</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppLogsModal(true)}
+                className="app-btn-sm bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]"
+              >
+                <span>View Logs</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWaToast(null)}
+                className="p-1 opacity-75 hover:opacity-100 cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1396,6 +1656,20 @@ export default function App() {
                 }
               })
               .catch(() => {});
+          }}
+        />
+      )}
+
+      {/* 11. WhatsApp Notification Logs & Retry Modal */}
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showWhatsAppLogsModal && canViewTickets && (
+        <WhatsAppLogsModal
+          canRetry={canUpdateTickets}
+          onRetrySuccess={() => {
+            loadData();
+          }}
+          onClose={() => {
+            setShowWhatsAppLogsModal(false);
+            loadData();
           }}
         />
       )}

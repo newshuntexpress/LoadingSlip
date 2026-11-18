@@ -13,6 +13,10 @@ import {
   LiquidStoreState,
   LiquidStoreSettings,
   ExFactoryEntry,
+  DriverLiveStatusResponse,
+  DriverTokenStatusResponse,
+  WhatsAppNotificationLog,
+  WhatsAppDispatchOutcome,
 } from '../types';
 
 const SESSION_TOKEN_STORAGE_KEY = 'gp_tab_session_token';
@@ -132,6 +136,32 @@ export const ApiClient = {
     if (res.csrfToken) setCsrfToken(res.csrfToken);
     if (!res.authenticated) setSessionToken(null);
     return res;
+  },
+
+  async lookupDriverStatus(truckNumber: string): Promise<DriverLiveStatusResponse> {
+    return request<DriverLiveStatusResponse>(
+      '/api/public/driver-status',
+      {
+        method: 'POST',
+        body: JSON.stringify({ truckNumber }),
+      },
+      true
+    );
+  },
+
+  async getTokenDriverLoadingStatus(token: string): Promise<DriverTokenStatusResponse> {
+    const res = await fetch(`/api/public/driver-loading-status/${encodeURIComponent(token)}`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => null);
+    if (!data) {
+      throw new ApiError('Unable to reach server to check live loading status.', res.status);
+    }
+    if (res.status === 429) {
+      throw new ApiError(data?.error || 'Too many requests. Please wait a moment.', 429);
+    }
+    return data as DriverTokenStatusResponse;
   },
 
   async setupInitialAdmin(payload: {
@@ -291,6 +321,34 @@ export const ApiClient = {
       body: JSON.stringify(updates),
     });
     return res.ticket;
+  },
+
+  async updateTicketWithNotification(
+    id: string,
+    updates: Partial<TicketRecord>
+  ): Promise<{ ticket: TicketRecord; whatsappNotification?: WhatsAppDispatchOutcome }> {
+    return request<{ ticket: TicketRecord; whatsappNotification?: WhatsAppDispatchOutcome }>(
+      `/api/tickets/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      }
+    );
+  },
+
+  async getWhatsAppLogs(ticketId?: string): Promise<WhatsAppNotificationLog[]> {
+    const qs = ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : '';
+    const res = await request<{ logs: WhatsAppNotificationLog[] }>(`/api/whatsapp/logs${qs}`);
+    return res.logs;
+  },
+
+  async retryWhatsAppNotification(
+    ticketId: string
+  ): Promise<{ outcome: WhatsAppDispatchOutcome; ticket: TicketRecord }> {
+    return request<{ outcome: WhatsAppDispatchOutcome; ticket: TicketRecord }>(
+      `/api/whatsapp/retry/${encodeURIComponent(ticketId)}`,
+      { method: 'POST' }
+    );
   },
 
   async deleteTicket(id: string): Promise<void> {

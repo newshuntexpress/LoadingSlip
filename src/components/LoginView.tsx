@@ -13,15 +13,22 @@ import {
   KeyRound,
   Mail,
   Loader2,
+  Truck,
 } from 'lucide-react';
 
 interface LoginViewProps {
   needsSetup: boolean;
   branding?: PublicBranding | null;
   onAuthenticated: (user: AuthUser) => void;
+  onOpenDriverStatus?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ needsSetup, branding, onAuthenticated }) => {
+export const LoginView: React.FC<LoginViewProps> = ({
+  needsSetup,
+  branding,
+  onAuthenticated,
+  onOpenDriverStatus,
+}) => {
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -86,7 +93,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ needsSetup, branding, onAu
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1C2833] via-[#283B4E] to-[#354A5F] flex flex-col items-center justify-center p-4 sm:p-6">
+    <div
+      data-preserve-case="true"
+      className="min-h-screen bg-gradient-to-br from-[#1C2833] via-[#283B4E] to-[#354A5F] flex flex-col items-center justify-center p-4 sm:p-6"
+    >
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#D1DBE5] overflow-hidden">
         <div className="h-1.5 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#0070F2]" />
         {/* Top Industrial Header */}
@@ -293,9 +303,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ needsSetup, branding, onAu
           </button>
 
           {!needsSetup && (
-            <p className="text-[11px] text-center text-[#5B738B] pt-1">
-              Access is restricted to authorized plant personnel. Need an account or password reset? Contact your system Administrator.
-            </p>
+            <>
+              {onOpenDriverStatus && (
+                <div className="pt-2 border-t border-[#E5ECF4]">
+                  <button
+                    type="button"
+                    onClick={onOpenDriverStatus}
+                    className="w-full min-h-[44px] bg-[#FEF7F1] hover:bg-[#FDECD8] border border-[#F9C99B] text-[#A64B00] font-extrabold text-xs sm:text-sm py-2.5 px-4 rounded-lg transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Truck className="w-4 h-4 text-[#E9730C] shrink-0" />
+                    <span>Driver Live Loading Status (Check Turn)</span>
+                  </button>
+                </div>
+              )}
+              <p className="text-[11px] text-center text-[#5B738B] pt-1">
+                Access is restricted to authorized plant personnel. Need an account or password reset? Contact your system Administrator.
+              </p>
+            </>
           )}
         </form>
       </div>

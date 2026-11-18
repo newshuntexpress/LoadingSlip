@@ -245,6 +245,41 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_ex_factory_date ON ex_factory_entries(entry_date DESC, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS driver_slip_tokens (
+    token TEXT PRIMARY KEY,
+    ticket_id TEXT NOT NULL UNIQUE REFERENCES tickets(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_driver_slip_tokens_ticket_id ON driver_slip_tokens(ticket_id);
+
+  CREATE TABLE IF NOT EXISTS whatsapp_notification_logs (
+    id TEXT PRIMARY KEY,
+    ticket_id TEXT NOT NULL,
+    ticket_number TEXT NOT NULL,
+    driver_name TEXT DEFAULT '',
+    driver_mobile TEXT DEFAULT '',
+    del_note_number TEXT DEFAULT '',
+    truck_number TEXT DEFAULT '',
+    gate_number TEXT DEFAULT '',
+    queue_number INTEGER DEFAULT 0,
+    message_type TEXT NOT NULL,
+    delivery_status TEXT NOT NULL,
+    whatsapp_message_id TEXT DEFAULT '',
+    error_message TEXT DEFAULT '',
+    driver_status_token TEXT DEFAULT '',
+    message_body TEXT DEFAULT '',
+    attempt_count INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    sent_at INTEGER,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_wa_logs_ticket_type ON whatsapp_notification_logs(ticket_id, message_type);
+  CREATE INDEX IF NOT EXISTS idx_wa_logs_created_at ON whatsapp_notification_logs(created_at DESC);
 `);
 
 // Safe additive schema migrations for existing databases

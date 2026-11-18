@@ -39,7 +39,15 @@ function forceElementValueUppercase(el: HTMLInputElement | HTMLTextAreaElement):
     end = null;
   }
 
+  // Preserve React's internal _valueTracker so React still detects the change and fires onChange
+  const tracker = (el as unknown as { _valueTracker?: { getValue?: () => string; setValue?: (v: string) => void } })._valueTracker;
+  const prevTrackedValue = tracker?.getValue?.();
+
   el.value = upper;
+
+  if (tracker && typeof tracker.setValue === 'function') {
+    tracker.setValue(prevTrackedValue ?? '');
+  }
 
   if (start !== null && end !== null) {
     try {

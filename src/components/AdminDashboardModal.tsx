@@ -302,7 +302,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-5">
+    <div
+      data-preserve-case="true"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-5"
+    >
       <div className="bg-white rounded-3xl shadow-2xl border border-neutral-200 w-full max-w-6xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-neutral-900 via-slate-900 to-blue-950 text-white px-5 py-4 flex flex-wrap items-center justify-between gap-3">

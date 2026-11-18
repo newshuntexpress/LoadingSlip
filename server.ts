@@ -46,6 +46,14 @@ import {
   normalizeDriverRecord,
   normalizeSettingsRecord,
 } from './server/normalize.ts';
+import {
+  ensureDriverSlipToken,
+  getDriverSlipToken,
+  markDriverTokenCompleted,
+  dispatchLoadingSlipWhatsAppNotification,
+  listWhatsAppLogs,
+  getLatestWhatsAppLogForTicket,
+} from './server/whatsapp.ts';
 
 const PORT = Number(process.env.PORT) || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
@@ -170,6 +178,443 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
     user,
     csrfToken: session.csrf_token,
     branding,
+  });
+});
+
+// ==========================================
+// 1B. PUBLIC DRIVER LIVE LOADING STATUS (12-HOUR VALIDITY)
+// ==========================================
+
+const DRIVER_STATUS_VALIDITY_MS = 12 * 60 * 60 * 1000;
+const DRIVER_LOOKUP_WINDOW_MS = 15 * 60 * 1000;
+const DRIVER_LOOKUP_MAX_REQUESTS = 90;
+const driverLookupIpMap = new Map<string, number[]>();
+
+function checkAndRecordDriverLookupRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const recent = (driverLookupIpMap.get(ip) || []).filter((ts) => now - ts < DRIVER_LOOKUP_WINDOW_MS);
+  if (recent.length >= DRIVER_LOOKUP_MAX_REQUESTS) {
+    driverLookupIpMap.set(ip, recent);
+    return false;
+  }
+  recent.push(now);
+  driverLookupIpMap.set(ip, recent);
+  return true;
+}
+
+function canonicalTruckKey(raw: unknown): string {
+  return String(raw || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function truckNumbersMatch(inputRaw: string, storedRaw: unknown): boolean {
+  const a = canonicalTruckKey(inputRaw);
+  const b = canonicalTruckKey(storedRaw);
+  if (!a || !b) return false;
+  return a === b;
+}
+
+function getTicketQueueRank(status: string): number {
+  switch (status) {
+    case 'under_loading':
+      return 0;
+    case 'called':
+      return 1;
+    case 'waiting':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+/**
+ * Keeps gateSequenceNumber strictly sequential & non-duplicated (1, 2, 3...)
+ * across all active vehicles ('under_loading', 'called', 'waiting') for a given date & gate.
+ */
+function recomputeGateQueueNumbers(dateStr: string, gateNumber: string): void {
+  const normGate = upperStr(gateNumber);
+  if (!dateStr || !normGate) return;
+
+  const sameDayRows = db
+    .prepare(`SELECT id, data_json FROM tickets WHERE date = ? ORDER BY sequence_number ASC`)
+    .all(dateStr) as Array<{ id: string; data_json: string }>;
+
+  const activeAtGate: Array<{ id: string; parsed: Record<string, any> }> = [];
+  for (const r of sameDayRows) {
+    try {
+      const parsed = normalizeTicketRecord(JSON.parse(r.data_json));
+      if (
+        upperStr(parsed.gateNumber) === normGate &&
+        (parsed.status === 'under_loading' || parsed.status === 'called' || parsed.status === 'waiting')
+      ) {
+        activeAtGate.push({ id: r.id, parsed });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  activeAtGate.sort((a, b) => {
+    const rankDiff = getTicketQueueRank(a.parsed.status) - getTicketQueueRank(b.parsed.status);
+    if (rankDiff !== 0) return rankDiff;
+    return (Number(a.parsed.sequenceNumber) || 0) - (Number(b.parsed.sequenceNumber) || 0);
+  });
+
+  const updateStmt = db.prepare(`UPDATE tickets SET data_json = ? WHERE id = ?`);
+  activeAtGate.forEach((entry, index) => {
+    const nextGateSeq = index + 1;
+    if (Number(entry.parsed.gateSequenceNumber) !== nextGateSeq) {
+      const updated = { ...entry.parsed, gateSequenceNumber: nextGateSeq };
+      updateStmt.run(JSON.stringify(updated), entry.id);
+    }
+  });
+}
+
+function computeLiveGateQueueForTicket(matchedTicket: Record<string, any>) {
+  const gateDate = String(matchedTicket.date || '');
+  const normGate = upperStr(matchedTicket.gateNumber);
+  const sameDayRows = db
+    .prepare(`SELECT data_json FROM tickets WHERE date = ? ORDER BY sequence_number ASC`)
+    .all(gateDate) as Array<{ data_json: string }>;
+
+  const gateTickets = sameDayRows
+    .map((r) => {
+      try {
+        return normalizeTicketRecord(JSON.parse(r.data_json));
+      } catch {
+        return null;
+      }
+    })
+    .filter((t): t is Record<string, any> => Boolean(t && upperStr(t.gateNumber) === normGate));
+
+  const underLoadingList = gateTickets
+    .filter((t) => t.status === 'under_loading')
+    .sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+  const calledList = gateTickets
+    .filter((t) => t.status === 'called')
+    .sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+  const waitingList = gateTickets
+    .filter((t) => t.status === 'waiting')
+    .sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0));
+
+  const activeQueue = [...underLoadingList, ...calledList, ...waitingList];
+  let trucksAhead = 0;
+  let queuePosition = 0;
+
+  if (matchedTicket.status === 'under_loading') {
+    const idxInLoading = underLoadingList.findIndex((t) => t.id === matchedTicket.id);
+    trucksAhead = 0;
+    queuePosition = idxInLoading >= 0 ? idxInLoading + 1 : 1;
+  } else if (matchedTicket.status === 'called') {
+    const idxInCalled = calledList.findIndex((t) => t.id === matchedTicket.id);
+    trucksAhead = underLoadingList.length + (idxInCalled >= 0 ? idxInCalled : 0);
+    queuePosition = trucksAhead + 1;
+  } else if (matchedTicket.status === 'waiting') {
+    const idxInWaiting = waitingList.findIndex((t) => t.id === matchedTicket.id);
+    trucksAhead = underLoadingList.length + calledList.length + (idxInWaiting >= 0 ? idxInWaiting : 0);
+    queuePosition = trucksAhead + 1;
+  }
+
+  const queueNumber = queuePosition > 0 ? queuePosition : Number(matchedTicket.gateSequenceNumber) || 1;
+  const activeLoadingOther = underLoadingList.find((t) => t.id !== matchedTicket.id);
+  const activeCalledOther = calledList.find((t) => t.id !== matchedTicket.id);
+
+  return {
+    gateNumber: String(matchedTicket.gateNumber || ''),
+    queueNumber,
+    trucksAhead,
+    queuePosition,
+    totalActiveAtGate: activeQueue.length,
+    currentlyLoadingTruck: activeLoadingOther ? upperStr(activeLoadingOther.truckNumber) : null,
+    nextCalledTruck: activeCalledOther ? upperStr(activeCalledOther.truckNumber) : null,
+    waitingCount: waitingList.length,
+    calledCount: calledList.length,
+    underLoadingCount: underLoadingList.length,
+  };
+}
+
+app.post('/api/public/driver-status', (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+  if (!checkAndRecordDriverLookupRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many status checks from this network. Please wait a few minutes and retry.' });
+    return;
+  }
+
+  const rawTruck = typeof req.body?.truckNumber === 'string' ? req.body.truckNumber.trim() : '';
+  const cleanTruckKey = canonicalTruckKey(rawTruck);
+  if (cleanTruckKey.length < 3) {
+    res.status(400).json({ error: 'Please enter a valid Vehicle / Truck Number (e.g. 5275 AXG).' });
+    return;
+  }
+
+  // Ensure any 30-60 minute automatic waiting->under_loading transitions are up to date
+  try {
+    processAutoLoadingTransitions();
+  } catch (err) {
+    console.error('Driver lookup auto-transition error:', err);
+  }
+
+  const now = Date.now();
+  const branding = getPublicBranding();
+
+  const recentRows = db
+    .prepare(
+      `SELECT id, ticket_number, sequence_number, date, data_json, created_at
+       FROM tickets
+       ORDER BY created_at DESC
+       LIMIT 600`
+    )
+    .all() as Array<{
+    id: string;
+    ticket_number: string;
+    sequence_number: number;
+    date: string;
+    data_json: string;
+    created_at: number;
+  }>;
+
+  let matchedRow: (typeof recentRows)[number] | null = null;
+  let matchedTicket: Record<string, any> | null = null;
+
+  for (const row of recentRows) {
+    try {
+      const parsed = normalizeTicketRecord(JSON.parse(row.data_json));
+      if (truckNumbersMatch(rawTruck, parsed.truckNumber)) {
+        matchedRow = row;
+        matchedTicket = parsed;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (!matchedRow || !matchedTicket) {
+    res.json({
+      found: false,
+      expired: false,
+      serverTimeMs: now,
+      branding,
+      message: 'No loading ticket or slip found for this Vehicle / Truck Number. Please check the truck number registered at gate entry.',
+    });
+    return;
+  }
+
+  const createdMs = Number(matchedTicket.createdAt || matchedRow.created_at || 0);
+  const expiresAt = createdMs + DRIVER_STATUS_VALIDITY_MS;
+  const isExpired = !createdMs || now > expiresAt;
+
+  if (isExpired) {
+    res.json({
+      found: true,
+      expired: true,
+      expiredAt: expiresAt,
+      serverTimeMs: now,
+      branding,
+      message:
+        'Your loading status window has expired after 12 hours from slip/ticket generation. Please contact Dispatch or Gate Security if a new slip was issued.',
+    });
+    return;
+  }
+
+  const gateDate = String(matchedTicket.date || '');
+  const queue = computeLiveGateQueueForTicket(matchedTicket);
+  const hasLoadingSlip = Boolean(
+    matchedTicket.loadingSlip &&
+      Array.isArray(matchedTicket.loadingSlip.items) &&
+      matchedTicket.loadingSlip.items.length > 0
+  );
+
+  res.json({
+    found: true,
+    expired: false,
+    serverTimeMs: now,
+    expiresAt,
+    remainingMs: Math.max(0, expiresAt - now),
+    branding,
+    ticket: {
+      id: matchedTicket.id,
+      ticketNumber: upperStr(matchedTicket.ticketNumber),
+      delNoteNumber: upperStr(matchedTicket.loadingSlip?.delNoteNumber || matchedTicket.delNoteNumber),
+      sequenceNumber: Number(matchedTicket.sequenceNumber) || 0,
+      gateNumber: String(matchedTicket.gateNumber || ''),
+      gateSequenceNumber: queue.queueNumber,
+      date: gateDate,
+      timeIn: String(matchedTicket.timeIn || ''),
+      timeCalled: matchedTicket.timeCalled ? String(matchedTicket.timeCalled) : undefined,
+      timeLoadingStarted: matchedTicket.timeLoadingStarted ? String(matchedTicket.timeLoadingStarted) : undefined,
+      timeCompleted: matchedTicket.timeCompleted ? String(matchedTicket.timeCompleted) : undefined,
+      truckNumber: upperStr(matchedTicket.truckNumber),
+      driverName: upperStr(matchedTicket.driverName),
+      driverPhone: String(matchedTicket.driverPhone || ''),
+      destinationPlace: upperStr(matchedTicket.loadingSlip?.placeName || matchedTicket.destinationPlace),
+      transporterName: upperStr(matchedTicket.transporterName),
+      status: matchedTicket.status,
+      priority: matchedTicket.priority === 'urgent' ? 'urgent' : 'normal',
+      createdAt: createdMs,
+      hasLoadingSlip,
+      slipLocked: Boolean(matchedTicket.loadingSlip?.isLocked),
+    },
+    queue,
+  });
+});
+
+// Public tokenized Driver Live Loading Status endpoint (no login required, no internal DB IDs exposed)
+app.get('/api/public/driver-loading-status/:token', noCacheHeaders, (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+  if (!checkIpRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many invalid requests. Please wait a few minutes and try again.' });
+    return;
+  }
+
+  const token = String(req.params.token || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(token)) {
+    recordIpAttempt(ip);
+    res.status(404).json({
+      found: false,
+      expired: false,
+      serverTimeMs: Date.now(),
+      branding: getPublicBranding(),
+      message: 'Invalid or unrecognized Driver Live Loading Status link.',
+    });
+    return;
+  }
+
+  const tokenRow = db
+    .prepare(
+      `SELECT t.token, t.ticket_id, t.created_at as token_created_at, t.completed_at as token_completed_at, t.expires_at,
+              tk.data_json, tk.updated_at as row_updated_at
+       FROM driver_slip_tokens t
+       INNER JOIN tickets tk ON tk.id = t.ticket_id
+       WHERE t.token = ?`
+    )
+    .get(token) as
+    | {
+        token: string;
+        ticket_id: string;
+        token_created_at: number;
+        token_completed_at: number | null;
+        expires_at: number;
+        data_json: string;
+        row_updated_at: number;
+      }
+    | undefined;
+
+  const now = Date.now();
+  const branding = getPublicBranding();
+
+  if (!tokenRow) {
+    recordIpAttempt(ip);
+    res.status(404).json({
+      found: false,
+      expired: false,
+      serverTimeMs: now,
+      branding,
+      message: 'This Driver Live Loading Status link is invalid or the loading slip is no longer available.',
+    });
+    return;
+  }
+
+  if (now > Number(tokenRow.expires_at || 0)) {
+    res.status(410).json({
+      found: true,
+      expired: true,
+      expiredAt: Number(tokenRow.expires_at),
+      serverTimeMs: now,
+      branding,
+      message:
+        'This Driver Live Loading Status link has expired after completion. Please check with Dispatch or Gate Security if you need assistance.',
+    });
+    return;
+  }
+
+  // Ensure any scheduled auto-loading transitions are applied before serving status
+  try {
+    processAutoLoadingTransitions(now);
+  } catch (err) {
+    console.error('Token driver status auto-transition error:', err);
+  }
+
+  const freshRow = db.prepare(`SELECT data_json, updated_at FROM tickets WHERE id = ?`).get(tokenRow.ticket_id) as
+    | { data_json: string; updated_at: number }
+    | undefined;
+  if (!freshRow) {
+    res.status(404).json({
+      found: false,
+      expired: false,
+      serverTimeMs: now,
+      branding,
+      message: 'Loading slip record is no longer active.',
+    });
+    return;
+  }
+
+  const ticket = normalizeTicketRecord(JSON.parse(freshRow.data_json));
+  const queue = computeLiveGateQueueForTicket(ticket);
+
+  const items: any[] = Array.isArray(ticket.loadingSlip?.items) ? ticket.loadingSlip.items : [];
+  const activeItems = items.filter(
+    (it) => String(it?.description || '').trim() || String(it?.qty || '').trim() || String(it?.pack || '').trim()
+  );
+  const totalItemsCount = activeItems.length;
+  const loadedItemsCount = activeItems.filter((it) => it?.isLoaded === true).length;
+
+  let statusLabel = 'Waiting in Queue';
+  let stepIndex = 0;
+  let progressPercent = 25;
+
+  if (ticket.status === 'called') {
+    statusLabel = 'Called to Gate';
+    stepIndex = 1;
+    progressPercent = 45;
+  } else if (ticket.status === 'under_loading') {
+    statusLabel = 'Under Loading';
+    stepIndex = 2;
+    if (totalItemsCount > 0) {
+      progressPercent = Math.min(95, 55 + Math.round((loadedItemsCount / totalItemsCount) * 40));
+    } else {
+      progressPercent = 70;
+    }
+  } else if (ticket.status === 'completed') {
+    statusLabel = 'Completed / Ready to Exit';
+    stepIndex = 3;
+    progressPercent = 100;
+  } else if (ticket.status === 'cancelled') {
+    statusLabel = 'Cancelled';
+    stepIndex = 0;
+    progressPercent = 0;
+  }
+
+  res.json({
+    found: true,
+    expired: false,
+    serverTimeMs: now,
+    expiresAt: Number(tokenRow.expires_at),
+    remainingMs: Math.max(0, Number(tokenRow.expires_at) - now),
+    branding,
+    slip: {
+      delNoteNumber: upperStr(ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber) || 'N/A',
+      truckNumber: upperStr(ticket.truckNumber) || 'N/A',
+      gateNumber: queue.gateNumber || 'Gate 1',
+      queueNumber: queue.queueNumber,
+      queuePosition: queue.queuePosition,
+      trucksAhead: queue.trucksAhead,
+      totalActiveAtGate: queue.totalActiveAtGate,
+      currentlyLoadingTruck: queue.currentlyLoadingTruck,
+      destinationPlace: upperStr(ticket.loadingSlip?.placeName || ticket.destinationPlace) || undefined,
+      status: ticket.status,
+      statusLabel,
+      progressPercent,
+      stepIndex,
+      totalItemsCount,
+      loadedItemsCount,
+      timeIn: ticket.timeIn || undefined,
+      timeCalled: ticket.timeCalled || undefined,
+      timeLoadingStarted: ticket.timeLoadingStarted || undefined,
+      timeCompleted: ticket.timeCompleted || undefined,
+      lastUpdatedAt: Number(ticket.updatedAt || freshRow.updated_at || now),
+    },
   });
 });
 
@@ -1169,6 +1614,7 @@ export function processAutoLoadingTransitions(nowMs = Date.now()): number {
   if (candidateRows.length === 0) return 0;
 
   const transitioned: Array<{ ticketNumber: string; createdAt: number; delayMinutes: number }> = [];
+  const affectedGates = new Map<string, { date: string; gateNumber: string }>();
 
   db.transaction(() => {
     const updateStmt = db.prepare(
@@ -1215,11 +1661,22 @@ export function processAutoLoadingTransitions(nowMs = Date.now()): number {
         row.id
       );
 
+      if (parsed.date && parsed.gateNumber) {
+        affectedGates.set(`${parsed.date}::${upperStr(parsed.gateNumber)}`, {
+          date: String(parsed.date),
+          gateNumber: String(parsed.gateNumber),
+        });
+      }
+
       transitioned.push({
         ticketNumber: row.ticket_number,
         createdAt: createdMs,
         delayMinutes,
       });
+    }
+
+    for (const g of affectedGates.values()) {
+      recomputeGateQueueNumbers(g.date, g.gateNumber);
     }
   })();
 
@@ -1247,17 +1704,35 @@ app.get(
     processAutoLoadingTransitions();
 
     const rows = db
-      .prepare(`SELECT data_json, version, created_by, updated_by FROM tickets ORDER BY date DESC, sequence_number ASC`)
-      .all() as Array<{ data_json: string; version: number; created_by: string | null; updated_by: string | null }>;
+      .prepare(
+        `SELECT t.id, t.data_json, t.version, t.created_by, t.updated_by, d.token as driver_status_token
+         FROM tickets t
+         LEFT JOIN driver_slip_tokens d ON d.ticket_id = t.id
+         ORDER BY t.date DESC, t.sequence_number ASC`
+      )
+      .all() as Array<{
+      id: string;
+      data_json: string;
+      version: number;
+      created_by: string | null;
+      updated_by: string | null;
+      driver_status_token: string | null;
+    }>;
 
-    const tickets = rows.map((r) =>
-      normalizeTicketRecord({
-        ...JSON.parse(r.data_json),
+    const tickets = rows.map((r) => {
+      const parsed = JSON.parse(r.data_json);
+      let driverStatusToken = r.driver_status_token || undefined;
+      if (!driverStatusToken && parsed.loadingSlip) {
+        driverStatusToken = ensureDriverSlipToken(r.id, parsed.status);
+      }
+      return normalizeTicketRecord({
+        ...parsed,
         version: r.version,
         createdBy: r.created_by || undefined,
         updatedBy: r.updated_by || undefined,
-      })
-    );
+        ...(driverStatusToken ? { driverStatusToken } : {}),
+      });
+    });
 
     res.json({ tickets });
   }
@@ -1346,8 +1821,17 @@ app.post(
         now
       );
 
-      upsertDriverMasterInternal(record);
-      return normalizeTicketRecord({ ...record, version: 1, createdBy: req.auth!.user.username, updatedBy: req.auth!.user.username });
+      recomputeGateQueueNumbers(dateStr, gateNumber);
+      const savedRow = db.prepare(`SELECT data_json FROM tickets WHERE id = ?`).get(id) as { data_json: string };
+      const finalRecord = normalizeTicketRecord(JSON.parse(savedRow.data_json));
+
+      upsertDriverMasterInternal(finalRecord);
+      return normalizeTicketRecord({
+        ...finalRecord,
+        version: 1,
+        createdBy: req.auth!.user.username,
+        updatedBy: req.auth!.user.username,
+      });
     });
 
     const created = createTx();
@@ -1372,7 +1856,7 @@ app.patch(
   requirePasswordChanged,
   requireCsrf,
   requirePermission('tickets.update'),
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const ticketId = req.params.id;
     const updates = req.body || {};
 
@@ -1393,7 +1877,14 @@ app.patch(
       }
 
       const prev = JSON.parse(existing.data_json);
-      const { version: _ignoreVer, createdBy: _ignoreCb, updatedBy: _ignoreUb, createdAt: _ignoreCa, ...cleanUpdates } = updates;
+      const {
+        version: _ignoreVer,
+        createdBy: _ignoreCb,
+        updatedBy: _ignoreUb,
+        createdAt: _ignoreCa,
+        driverStatusToken: _ignoreDst,
+        ...cleanUpdates
+      } = updates;
 
       if (prev.loadingSlip?.isLocked && cleanUpdates.loadingSlip) {
         const prevItemsJson = JSON.stringify(prev.loadingSlip.items || []);
@@ -1411,25 +1902,25 @@ app.patch(
       }
 
       const now = Date.now();
-      const shouldAutoUnderLoading =
-        Boolean(cleanUpdates.loadingSlip) &&
-        !cleanUpdates.status &&
-        !prev.loadingSlip?.isLocked &&
-        prev.status !== 'completed' &&
-        prev.status !== 'cancelled';
-      const effectiveUpdates = shouldAutoUnderLoading
-        ? {
-            ...cleanUpdates,
-            status: 'under_loading',
-            timeLoadingStarted: cleanUpdates.timeLoadingStarted || prev.timeLoadingStarted || formatPlantTime(now),
-          }
-        : cleanUpdates;
+      const hadSlipBefore = Boolean(
+        prev.loadingSlip &&
+          (String(prev.loadingSlip.delNoteNumber || '').trim() ||
+            (Array.isArray(prev.loadingSlip.items) &&
+              prev.loadingSlip.items.some(
+                (it: any) =>
+                  String(it?.description || '').trim() ||
+                  String(it?.qty || '').trim() ||
+                  String(it?.pack || '').trim()
+              )))
+      );
+      const isNewLoadingSlip = Boolean(cleanUpdates.loadingSlip) && !hadSlipBefore;
 
-      const hasManualStatusChange =
-        typeof effectiveUpdates.status === 'string' && effectiveUpdates.status !== prev.status;
+      // Preserve 'Waiting in Queue' when newly generating a Loading Slip unless explicitly changed
+      const requestedStatus = typeof cleanUpdates.status === 'string' ? cleanUpdates.status : undefined;
+      const hasManualStatusChange = Boolean(requestedStatus && requestedStatus !== prev.status);
       const merged = normalizeTicketRecord({
         ...prev,
-        ...effectiveUpdates,
+        ...cleanUpdates,
         id: prev.id,
         ticketNumber: prev.ticketNumber,
         sequenceNumber: prev.sequenceNumber,
@@ -1443,18 +1934,38 @@ app.patch(
         `UPDATE tickets SET date = ?, data_json = ?, version = ?, updated_by = ?, updated_at = ? WHERE id = ?`
       ).run(merged.date, JSON.stringify(merged), nextVersion, req.auth!.user.username, now, ticketId);
 
+      // Recompute non-duplicated active queue positions for current (and prior if gate/date changed)
+      recomputeGateQueueNumbers(merged.date, merged.gateNumber);
+      if (upperStr(prev.gateNumber) !== upperStr(merged.gateNumber) || prev.date !== merged.date) {
+        recomputeGateQueueNumbers(prev.date, prev.gateNumber);
+      }
+
+      // Ensure unique secure driver live status token when loading slip is present
+      if (merged.loadingSlip) {
+        ensureDriverSlipToken(ticketId, merged.status);
+      }
+      if (merged.status === 'completed' || merged.status === 'cancelled') {
+        markDriverTokenCompleted(ticketId);
+      }
+
       if (cleanUpdates.truckNumber || cleanUpdates.driverName || cleanUpdates.driverPhone) {
         upsertDriverMasterInternal(merged);
       }
 
+      const refreshedRow = db.prepare(`SELECT data_json FROM tickets WHERE id = ?`).get(ticketId) as { data_json: string };
+      const driverStatusToken = getDriverSlipToken(ticketId);
+      const finalTicket = normalizeTicketRecord({
+        ...JSON.parse(refreshedRow.data_json),
+        version: nextVersion,
+        createdBy: existing.created_by || undefined,
+        updatedBy: req.auth!.user.username,
+        ...(driverStatusToken ? { driverStatusToken } : {}),
+      });
+
       return {
-        ticket: normalizeTicketRecord({
-          ...merged,
-          version: nextVersion,
-          createdBy: existing.created_by || undefined,
-          updatedBy: req.auth!.user.username,
-        }),
+        ticket: finalTicket,
         slipSaved: Boolean(cleanUpdates.loadingSlip),
+        isNewLoadingSlip,
       };
     })();
 
@@ -1473,7 +1984,46 @@ app.patch(
       ipAddress: getClientIp(req),
     });
 
-    res.json({ ticket: result.ticket });
+    // Trigger Automatic WhatsApp notification when a Loading Slip is newly generated
+    let whatsappNotification: Awaited<ReturnType<typeof dispatchLoadingSlipWhatsAppNotification>> | undefined;
+    if (result.isNewLoadingSlip) {
+      const liveQueue = computeLiveGateQueueForTicket(result.ticket);
+      try {
+        whatsappNotification = await dispatchLoadingSlipWhatsAppNotification({
+          ticket: result.ticket,
+          queueNumber: liveQueue.queueNumber,
+          req,
+          isRetry: false,
+        });
+
+        if (whatsappNotification.triggered) {
+          logAudit({
+            actorUserId: req.auth!.user.id,
+            actorUsername: req.auth!.user.username,
+            action:
+              whatsappNotification.deliveryStatus === 'sent'
+                ? 'WHATSAPP_AUTO_SENT'
+                : whatsappNotification.deliveryStatus === 'skipped'
+                ? 'WHATSAPP_AUTO_SKIPPED'
+                : 'WHATSAPP_AUTO_FAILED',
+            targetType: 'ticket',
+            targetId: result.ticket.ticketNumber,
+            details:
+              whatsappNotification.deliveryStatus === 'sent'
+                ? `Auto-sent WhatsApp update to ${whatsappNotification.driverMobile} (Queue #${whatsappNotification.queueNumber}, Gate ${whatsappNotification.gateNumber})`
+                : `Auto WhatsApp ${whatsappNotification.deliveryStatus}: ${whatsappNotification.errorMessage || 'Unknown error'}`,
+            ipAddress: getClientIp(req),
+          });
+        }
+      } catch (err: any) {
+        console.error('WhatsApp auto-dispatch unexpected error:', err);
+      }
+    }
+
+    res.json({
+      ticket: result.ticket,
+      ...(whatsappNotification ? { whatsappNotification } : {}),
+    });
   }
 );
 
@@ -1547,12 +2097,17 @@ app.post(
         ticketId
       );
 
+      recomputeGateQueueNumbers(updated.date, updated.gateNumber);
+      const refreshedRow = db.prepare(`SELECT data_json FROM tickets WHERE id = ?`).get(ticketId) as { data_json: string };
+      const driverStatusToken = getDriverSlipToken(ticketId);
+
       return {
         ticket: normalizeTicketRecord({
-          ...updated,
+          ...JSON.parse(refreshedRow.data_json),
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
+          ...(driverStatusToken ? { driverStatusToken } : {}),
         }),
         changed: true,
       };
@@ -1682,12 +2237,14 @@ app.patch(
         ticketId
       );
 
+      const driverStatusToken = getDriverSlipToken(ticketId);
       return {
         ticket: normalizeTicketRecord({
           ...updated,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
+          ...(driverStatusToken ? { driverStatusToken } : {}),
         }),
       };
     })();
@@ -1798,6 +2355,9 @@ app.post(
         ticketId
       );
 
+      recomputeGateQueueNumbers(updated.date, updated.gateNumber);
+      markDriverTokenCompleted(ticketId);
+
       const alertId = `alt-${now}-${crypto.randomBytes(3).toString('hex')}`;
       const delNoteNumber = upperStr(lockedSlip.delNoteNumber || prev.delNoteNumber) || '—';
       const truckNumber = upperStr(prev.truckNumber) || '—';
@@ -1820,12 +2380,14 @@ app.post(
         createdAt: now,
       };
 
+      const driverStatusToken = getDriverSlipToken(ticketId);
       return {
         ticket: normalizeTicketRecord({
           ...updated,
           version: nextVersion,
           createdBy: existing.created_by || undefined,
           updatedBy: req.auth!.user.username,
+          ...(driverStatusToken ? { driverStatusToken } : {}),
         }),
         alert,
       };
@@ -1972,6 +2534,9 @@ app.delete(
 
     db.prepare(`DELETE FROM tickets WHERE id = ?`).run(ticketId);
     const parsed = JSON.parse(existing.data_json);
+    if (parsed.date && parsed.gateNumber) {
+      recomputeGateQueueNumbers(parsed.date, parsed.gateNumber);
+    }
 
     logAudit({
       actorUserId: req.auth!.user.id,
@@ -1984,6 +2549,103 @@ app.delete(
     });
 
     res.json({ ok: true });
+  }
+);
+
+// WhatsApp Notification Logs & Retry Endpoints
+app.get(
+  '/api/whatsapp/logs',
+  requireAuth,
+  requirePasswordChanged,
+  requireAnyPermission(['tickets.view', 'tickets.update']),
+  (req: Request, res: Response) => {
+    const roleName = req.auth!.user.roleName;
+    if (roleName === 'forklift_operator' || roleName === 'liquid_store_operator' || roleName === 'ex_factory_operator') {
+      res.status(403).json({ error: 'Access denied for restricted operator accounts.' });
+      return;
+    }
+    const ticketId = typeof req.query.ticketId === 'string' ? req.query.ticketId.trim() : undefined;
+    const limit = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const logs = listWhatsAppLogs({ ticketId, limit });
+    res.json({ logs });
+  }
+);
+
+app.post(
+  '/api/whatsapp/retry/:ticketId',
+  requireAuth,
+  requirePasswordChanged,
+  requireCsrf,
+  requirePermission('tickets.update'),
+  async (req: Request, res: Response) => {
+    const ticketId = String(req.params.ticketId || '').trim();
+    const row = db.prepare(`SELECT data_json, version, created_by, updated_by FROM tickets WHERE id = ?`).get(ticketId) as
+      | { data_json: string; version: number; created_by: string | null; updated_by: string | null }
+      | undefined;
+
+    if (!row) {
+      res.status(404).json({ error: 'Ticket record not found.' });
+      return;
+    }
+
+    const ticket = normalizeTicketRecord({
+      ...JSON.parse(row.data_json),
+      version: row.version,
+      createdBy: row.created_by || undefined,
+      updatedBy: row.updated_by || undefined,
+    });
+
+    if (!ticket.loadingSlip) {
+      res.status(400).json({ error: 'Generate a Loading Slip first before sending the WhatsApp notification.' });
+      return;
+    }
+
+    const existingLog = getLatestWhatsAppLogForTicket(ticketId);
+    if (existingLog && existingLog.deliveryStatus === 'sent') {
+      res.status(409).json({
+        error: 'WhatsApp message was already successfully delivered for this loading slip. Duplicate sending is disabled.',
+        outcome: {
+          triggered: false,
+          duplicatePrevented: true,
+          deliveryStatus: 'sent',
+          whatsappMessageId: existingLog.whatsappMessageId,
+          driverMobile: existingLog.driverMobile,
+          driverStatusToken: existingLog.driverStatusToken,
+          queueNumber: existingLog.queueNumber,
+          gateNumber: existingLog.gateNumber,
+          log: existingLog,
+        },
+      });
+      return;
+    }
+
+    const liveQueue = computeLiveGateQueueForTicket(ticket);
+    const outcome = await dispatchLoadingSlipWhatsAppNotification({
+      ticket,
+      queueNumber: liveQueue.queueNumber,
+      req,
+      isRetry: true,
+    });
+
+    logAudit({
+      actorUserId: req.auth!.user.id,
+      actorUsername: req.auth!.user.username,
+      action:
+        outcome.deliveryStatus === 'sent'
+          ? 'WHATSAPP_RETRY_SENT'
+          : outcome.deliveryStatus === 'skipped'
+          ? 'WHATSAPP_RETRY_SKIPPED'
+          : 'WHATSAPP_RETRY_FAILED',
+      targetType: 'ticket',
+      targetId: ticket.ticketNumber,
+      details:
+        outcome.deliveryStatus === 'sent'
+          ? `Retry succeeded: sent WhatsApp to ${outcome.driverMobile} (ID: ${outcome.whatsappMessageId})`
+          : `Retry ${outcome.deliveryStatus}: ${outcome.errorMessage || 'Unknown error'}`,
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({ outcome, ticket });
   }
 );
 
@@ -2020,6 +2682,8 @@ app.post(
       record.createdAt || now,
       now
     );
+
+    recomputeGateQueueNumbers(record.date, record.gateNumber);
 
     logAudit({
       actorUserId: req.auth!.user.id,
