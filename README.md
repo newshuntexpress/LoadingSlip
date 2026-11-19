@@ -30,6 +30,7 @@ git push -u origin main
 2. Connect your GitHub account and pick your repository & `main` branch.
 3. Configure the **Build & Runtime Settings**:
    - **Node.js Version**: `22.x` (required for native TypeScript execution via `node server.ts`)
+   - **Entry File**: `server.ts` *(change from default `server.js` to `server.ts`)*
    - **Build Command**: `npm run build`
    - **Start Command**: `npm start`
 4. Add **Environment Variables** in Hostinger hPanel:
