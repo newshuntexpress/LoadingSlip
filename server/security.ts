@@ -178,6 +178,8 @@ export function clearSessionCookie(req: Request, res: Response): void {
   }
 }
 
+const ADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function createSessionForUser(
   req: Request,
   res: Response,
@@ -187,15 +189,18 @@ export function createSessionForUser(
   const sessionId = hashSessionToken(rawToken);
   const csrfToken = crypto.randomBytes(24).toString('hex');
   const now = Date.now();
+  const user = getSafeUserById(userId);
+  const isAdmin = user?.roleName === 'admin';
   const idleMs = getIdleTimeoutMs();
-  const expiresAt = now + idleMs;
+  const expiresAt = isAdmin ? now + ADMIN_SESSION_TTL_MS : now + idleMs;
+  const cookieMaxAgeMs = isAdmin ? ADMIN_SESSION_TTL_MS : 12 * 60 * 60 * 1000;
 
   db.prepare(
     `INSERT INTO sessions (id, user_id, csrf_token, ip_address, user_agent, created_at, last_activity_at, expires_at, revoked_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`
   ).run(sessionId, userId, csrfToken, getClientIp(req), String(req.headers['user-agent'] || '').slice(0, 250), now, now, expiresAt);
 
-  setSessionCookie(req, res, rawToken, 12 * 60 * 60 * 1000);
+  setSessionCookie(req, res, rawToken, cookieMaxAgeMs);
   return { rawToken, csrfToken, expiresAt };
 }
 
@@ -238,24 +243,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   const now = Date.now();
-  const maxLifetimeMs = 12 * 60 * 60 * 1000;
-  if (now > session.expires_at || now - session.created_at > maxLifetimeMs) {
-    db.prepare(`UPDATE sessions SET revoked_at = ? WHERE id = ?`).run(now, session.id);
-    const expiredUser = getSafeUserById(session.user_id);
-    logAudit({
-      actorUserId: session.user_id,
-      actorUsername: expiredUser?.username || 'unknown',
-      action: 'SESSION_EXPIRED',
-      targetType: 'session',
-      targetId: session.id.slice(0, 12),
-      details: 'Session expired due to inactivity or max lifetime',
-      ipAddress: getClientIp(req),
-    });
-    clearSessionCookie(req, res);
-    res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
-    return;
-  }
-
   const user = getSafeUserById(session.user_id);
   if (!user || !user.isActive) {
     db.prepare(`UPDATE sessions SET revoked_at = ? WHERE id = ?`).run(now, session.id);
@@ -264,9 +251,36 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
-  // Sliding idle expiration refresh
-  const nextExpiry = now + getIdleTimeoutMs();
-  db.prepare(`UPDATE sessions SET last_activity_at = ?, expires_at = ? WHERE id = ?`).run(now, nextExpiry, session.id);
+  const isAdmin = user.roleName === 'admin';
+  const idleMs = getIdleTimeoutMs();
+
+  // Auto-Logout Idle Timeout applies ONLY to non-admin users (Admins stay signed in)
+  if (!isAdmin) {
+    const maxLifetimeMs = 12 * 60 * 60 * 1000;
+    const effectiveExpiry = Math.min(session.expires_at, session.last_activity_at + idleMs);
+    if (now > effectiveExpiry || now - session.created_at > maxLifetimeMs) {
+      db.prepare(`UPDATE sessions SET revoked_at = ? WHERE id = ?`).run(now, session.id);
+      logAudit({
+        actorUserId: session.user_id,
+        actorUsername: user.username || 'unknown',
+        action: 'SESSION_EXPIRED',
+        targetType: 'session',
+        targetId: session.id.slice(0, 12),
+        details: 'User session expired due to inactivity or max lifetime',
+        ipAddress: getClientIp(req),
+      });
+      clearSessionCookie(req, res);
+      res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
+      return;
+    }
+  }
+
+  // Background automated polling must not extend a non-admin user's idle timeout window
+  const isBackgroundPoll = req.headers['x-background-poll'] === '1';
+  if (!isBackgroundPoll || isAdmin) {
+    const nextExpiry = isAdmin ? now + ADMIN_SESSION_TTL_MS : now + idleMs;
+    db.prepare(`UPDATE sessions SET last_activity_at = ?, expires_at = ? WHERE id = ?`).run(now, nextExpiry, session.id);
+  }
 
   req.auth = {
     sessionId: session.id,

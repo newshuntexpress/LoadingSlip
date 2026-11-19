@@ -21,6 +21,7 @@ import {
 import {
   DUMMY_BCRYPT_HASH,
   getClientIp,
+  getIdleTimeoutMs,
   hashSessionToken,
   extractSessionToken,
   validateUsername,
@@ -147,7 +148,7 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
   const sessionId = hashSessionToken(rawToken);
   const session = db
     .prepare(
-      `SELECT id, user_id, csrf_token, created_at, expires_at, revoked_at
+      `SELECT id, user_id, csrf_token, created_at, last_activity_at, expires_at, revoked_at
        FROM sessions WHERE id = ?`
     )
     .get(sessionId) as
@@ -156,13 +157,14 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
         user_id: string;
         csrf_token: string;
         created_at: number;
+        last_activity_at: number;
         expires_at: number;
         revoked_at: number | null;
       }
     | undefined;
 
   const now = Date.now();
-  if (!session || session.revoked_at !== null || now > session.expires_at || now - session.created_at > 12 * 3600 * 1000) {
+  if (!session || session.revoked_at !== null) {
     clearSessionCookie(req, res);
     res.json({ authenticated: false, needsSetup: false, branding });
     return;
@@ -173,6 +175,17 @@ app.get('/api/auth/status', (req: Request, res: Response) => {
     clearSessionCookie(req, res);
     res.json({ authenticated: false, needsSetup: false, branding });
     return;
+  }
+
+  if (user.roleName !== 'admin') {
+    const idleMs = getIdleTimeoutMs();
+    const effectiveExpiry = Math.min(session.expires_at, session.last_activity_at + idleMs);
+    if (now > effectiveExpiry || now - session.created_at > 12 * 3600 * 1000) {
+      db.prepare(`UPDATE sessions SET revoked_at = ? WHERE id = ?`).run(now, session.id);
+      clearSessionCookie(req, res);
+      res.json({ authenticated: false, needsSetup: false, branding });
+      return;
+    }
   }
 
   res.json({

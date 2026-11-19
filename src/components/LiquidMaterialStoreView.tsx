@@ -6,7 +6,7 @@ import {
   LiquidTankComputed,
   LiquidTransaction,
 } from '../types';
-import { ApiClient } from '../services/api';
+import { ApiClient, withBackgroundPoll } from '../services/api';
 import { LiquidTankSvg } from './LiquidTankSvg';
 import { LiquidPrintPreviewModal, LiquidPrintTarget } from './LiquidPrintPreviewModal';
 import {
@@ -202,9 +202,12 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const loadState = useCallback(async () => {
+  const loadState = useCallback(async (isBackgroundPoll?: unknown) => {
     try {
-      const data = await ApiClient.getLiquidState();
+      const data =
+        isBackgroundPoll === true
+          ? await withBackgroundPoll(() => ApiClient.getLiquidState())
+          : await ApiClient.getLiquidState();
       setStore(data);
       setFacilityInput(data.settings.facilityName);
     } catch (err: any) {
@@ -215,8 +218,10 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
   }, [showToast]);
 
   useEffect(() => {
-    loadState();
-    const timer = setInterval(loadState, 15000);
+    loadState(false);
+    const timer = setInterval(() => {
+      loadState(true);
+    }, 15000);
     return () => clearInterval(timer);
   }, [loadState]);
 

@@ -6,7 +6,7 @@ import {
   getCurrentTimeString,
   formatDisplayDate,
 } from './services/storage';
-import { ApiClient, ApiError, setAuthErrorHandlers, setCsrfToken, setSessionToken } from './services/api';
+import { ApiClient, ApiError, setAuthErrorHandlers, setCsrfToken, setSessionToken, withBackgroundPoll } from './services/api';
 import { GateQueueDashboard } from './components/GateQueueDashboard';
 import { TicketTable } from './components/TicketTable';
 import { ForkliftLoadingView } from './components/ForkliftLoadingView';
@@ -239,8 +239,10 @@ export default function App() {
     setDeletedToast(null);
   }, []);
 
+  const lastUserActivityRef = useRef<number>(Date.now());
+
   // Load shared application data from authenticated backend
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isBackgroundPoll = false) => {
     const forkliftOnly = currentUser?.roleName === 'forklift_operator';
     const userIsAdmin = currentUser?.roleName === 'admin';
     const userPerms = currentUser?.permissions || [];
@@ -260,18 +262,26 @@ export default function App() {
         userPerms.includes('ex_factory.create') ||
         userPerms.includes('ex_factory.update'));
 
+    const markAsBackgroundPoll =
+      isBackgroundPoll && Date.now() - lastUserActivityRef.current >= 60_000;
+
     try {
-      const [ticketsRes, driversRes, settingsRes, alertsRes, waLogsRes] = await Promise.all([
-        userCanFetchTickets ? ApiClient.getTickets() : Promise.resolve([] as TicketRecord[]),
-        userCanFetchDrivers ? ApiClient.getDrivers() : Promise.resolve([]),
-        ApiClient.getSettings(),
-        !forkliftOnly && userCanViewTickets
-          ? ApiClient.getLoadingAlerts().catch(() => [] as LoadingAlertNotification[])
-          : Promise.resolve([] as LoadingAlertNotification[]),
-        !forkliftOnly && userCanViewTickets
-          ? ApiClient.getWhatsAppLogs().catch(() => [])
-          : Promise.resolve([]),
-      ]);
+      const fetchAll = () =>
+        Promise.all([
+          userCanFetchTickets ? ApiClient.getTickets() : Promise.resolve([] as TicketRecord[]),
+          userCanFetchDrivers ? ApiClient.getDrivers() : Promise.resolve([]),
+          ApiClient.getSettings(),
+          !forkliftOnly && userCanViewTickets
+            ? ApiClient.getLoadingAlerts().catch(() => [] as LoadingAlertNotification[])
+            : Promise.resolve([] as LoadingAlertNotification[]),
+          !forkliftOnly && userCanViewTickets
+            ? ApiClient.getWhatsAppLogs().catch(() => [])
+            : Promise.resolve([]),
+        ]);
+
+      const [ticketsRes, driversRes, settingsRes, alertsRes, waLogsRes] = markAsBackgroundPoll
+        ? await withBackgroundPoll(fetchAll)
+        : await fetchAll();
       StorageService.hydrateFromServer({
         tickets: ticketsRes,
         drivers: driversRes,
@@ -453,12 +463,12 @@ export default function App() {
     })();
 
     const pollInterval = setInterval(() => {
-      loadData();
+      loadData(true);
     }, 15000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        loadData();
+        loadData(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -469,6 +479,50 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [currentUser, isLiquidStoreOnly, isExFactoryOnly, loadData]);
+
+  // Auto-Logout Idle Timeout applies ONLY to non-admin users (Admins stay signed in)
+  useEffect(() => {
+    if (!currentUser || currentUser.mustChangePassword || currentUser.roleName === 'admin') {
+      return;
+    }
+
+    lastUserActivityRef.current = Date.now();
+    let lastRecorded = lastUserActivityRef.current;
+
+    const recordActivity = () => {
+      const now = Date.now();
+      if (now - lastRecorded >= 5000) {
+        lastRecorded = now;
+        lastUserActivityRef.current = now;
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'scroll',
+      'click',
+    ];
+    activityEvents.forEach((evt) => window.addEventListener(evt, recordActivity, { passive: true }));
+
+    const idleMinutes = Math.max(5, Math.min(720, Number(settings.sessionIdleMinutes) || 30));
+    const idleTimeoutMs = idleMinutes * 60 * 1000;
+
+    const idleCheckTimer = setInterval(() => {
+      if (Date.now() - lastUserActivityRef.current >= idleTimeoutMs) {
+        clearInterval(idleCheckTimer);
+        ApiClient.logout().catch(() => {});
+        clearSessionState();
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(idleCheckTimer);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, recordActivity));
+    };
+  }, [currentUser, settings.sessionIdleMinutes, clearSessionState]);
 
   // Auto-dismiss undo toast after 6 seconds
   useEffect(() => {

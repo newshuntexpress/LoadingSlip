@@ -460,7 +460,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={(e) => setSessionIdleMinutes(Math.max(5, Math.min(720, parseInt(e.target.value, 10) || 30)))}
                 className="w-28 px-3 py-1.5 text-xs font-bold rounded-lg border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
               />
-              <span className="text-[11px] text-neutral-500 ml-2">(5–720 min)</span>
+              <span className="text-[11px] text-neutral-500 ml-2">
+                (5–720 min · Non-admin users only; Admin stays signed in)
+              </span>
             </div>
           </div>
 

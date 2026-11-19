@@ -30,6 +30,16 @@ let inMemorySessionToken: string | null = (() => {
 })();
 let unauthorizedHandler: (() => void) | null = null;
 let passwordChangeRequiredHandler: (() => void) | null = null;
+let backgroundPollDepth = 0;
+
+export function withBackgroundPoll<T>(fn: () => T): T {
+  backgroundPollDepth += 1;
+  try {
+    return fn();
+  } finally {
+    backgroundPollDepth -= 1;
+  }
+}
 
 export class ApiError extends Error {
   status: number;
@@ -75,6 +85,10 @@ async function request<T>(url: string, options: RequestInit = {}, skipAuthHooks 
     ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string> | undefined),
   };
+
+  if (backgroundPollDepth > 0 && !headers['X-Background-Poll']) {
+    headers['X-Background-Poll'] = '1';
+  }
 
   if (inMemorySessionToken && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${inMemorySessionToken}`;

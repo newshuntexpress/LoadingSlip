@@ -525,15 +525,17 @@ function seedDatabase(): void {
     })();
   }
 
-  // Optionally auto-seed admin if ADMIN_INITIAL_PASSWORD env var is set and no users exist
+  // Auto-seed default administrator when database has no users (supports env override)
   const userCountRow = db.prepare(`SELECT COUNT(*) as cnt FROM users`).get() as { cnt: number };
-  if (userCountRow.cnt === 0 && process.env.ADMIN_INITIAL_PASSWORD) {
-    const hash = bcrypt.hashSync(process.env.ADMIN_INITIAL_PASSWORD, 12);
+  if (userCountRow.cnt === 0) {
+    const defaultAdminUsername = (process.env.ADMIN_INITIAL_USERNAME || 'admin').trim() || 'admin';
+    const defaultAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'Admin@1234';
+    const hash = bcrypt.hashSync(defaultAdminPassword, 12);
     const adminId = `usr_${crypto.randomUUID()}`;
     db.prepare(
       `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, 1, 'system', ?, ?)`
-    ).run(adminId, 'admin', 'System Administrator', '', hash, 'role_admin', now, now);
+       VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'system', ?, ?)`
+    ).run(adminId, defaultAdminUsername, 'System Administrator', '', hash, 'role_admin', now, now);
   }
 
   seedLiquidStoreIfEmpty();
