@@ -1,9 +1,10 @@
 import type { jsPDF } from 'jspdf';
 
 const MAX_LOGO_DIMENSION = 320;
+const MAX_SIGNATURE_DIMENSION = 480;
 const MAX_RAW_FILE_BYTES = 5 * 1024 * 1024;
 
-export async function processLogoFile(file: File): Promise<string> {
+async function normalizeImageFile(file: File, maxDimension: number, label: string): Promise<string> {
   if (!file) {
     throw new Error('No image file selected.');
   }
@@ -13,7 +14,7 @@ export async function processLogoFile(file: File): Promise<string> {
     throw new Error('Please upload a valid image file (PNG, JPG, WebP, GIF, or SVG).');
   }
   if (file.size > MAX_RAW_FILE_BYTES) {
-    throw new Error('Logo file is too large. Maximum allowed file size is 5 MB.');
+    throw new Error(`${label} file is too large. Maximum allowed file size is 5 MB.`);
   }
 
   const rawDataUrl = await new Promise<string>((resolve, reject) => {
@@ -31,9 +32,9 @@ export async function processLogoFile(file: File): Promise<string> {
     image.src = rawDataUrl;
   });
 
-  const srcW = img.naturalWidth || img.width || MAX_LOGO_DIMENSION;
-  const srcH = img.naturalHeight || img.height || MAX_LOGO_DIMENSION;
-  const scale = Math.min(1, MAX_LOGO_DIMENSION / Math.max(srcW, srcH));
+  const srcW = img.naturalWidth || img.width || maxDimension;
+  const srcH = img.naturalHeight || img.height || maxDimension;
+  const scale = Math.min(1, maxDimension / Math.max(srcW, srcH));
   const outW = Math.max(1, Math.round(srcW * scale));
   const outH = Math.max(1, Math.round(srcH * scale));
 
@@ -42,12 +43,20 @@ export async function processLogoFile(file: File): Promise<string> {
   canvas.height = outH;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
-    throw new Error('Unable to process logo image in this browser.');
+    throw new Error(`Unable to process ${label.toLowerCase()} image in this browser.`);
   }
   ctx.clearRect(0, 0, outW, outH);
   ctx.drawImage(img, 0, 0, outW, outH);
 
   return canvas.toDataURL('image/png');
+}
+
+export async function processLogoFile(file: File): Promise<string> {
+  return normalizeImageFile(file, MAX_LOGO_DIMENSION, 'Logo');
+}
+
+export async function processSignatureFile(file: File): Promise<string> {
+  return normalizeImageFile(file, MAX_SIGNATURE_DIMENSION, 'Signature');
 }
 
 export function drawPdfLogo(

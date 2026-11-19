@@ -43,6 +43,7 @@ export function normalizeLoadingSlip<T extends Record<string, any> | undefined>(
     ...(slip.forkliftOperatorName !== undefined ? { forkliftOperatorName: trimStr(slip.forkliftOperatorName) } : {}),
     ...(slip.verifiedBy !== undefined ? { verifiedBy: trimStr(slip.verifiedBy) } : {}),
     ...(slip.checkedBy !== undefined ? { checkedBy: trimStr(slip.checkedBy) } : {}),
+    ...(slip.storeInchargeUserId !== undefined ? { storeInchargeUserId: trimStr(slip.storeInchargeUserId) } : {}),
     ...(slip.storeInchargeName !== undefined ? { storeInchargeName: trimStr(slip.storeInchargeName) } : {}),
     ...(slip.loadedBy !== undefined ? { loadedBy: trimStr(slip.loadedBy) } : {}),
     ...(slip.loadingCompletedTime !== undefined ? { loadingCompletedTime: trimStr(slip.loadingCompletedTime) } : {}),

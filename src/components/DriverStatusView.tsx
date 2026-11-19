@@ -253,14 +253,14 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#F3F6FA] text-[#1C2833] flex flex-col">
-      {/* Compact Sticky Top Bar */}
-      <header className="sticky top-0 z-30 bg-[#354A5F] text-white border-b border-[#223242] shadow-sm">
-        <div className="h-1 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#0070F2]" />
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+    <div className="min-h-screen text-[#1C2833] flex flex-col">
+      {/* 3D Beveled Sticky Top Bar */}
+      <header className="sticky top-0 z-30 bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white border-b-2 border-[#1B2836] shadow-[0_8px_22px_-6px_rgba(15,23,42,0.45)]">
+        <div className="h-1.5 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
             {effectiveBranding?.logoDataUrl ? (
-              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0 overflow-hidden p-0.5 ring-1 ring-[#F0AB00]/60">
+              <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shrink-0 overflow-hidden p-1 ring-2 ring-[#F0AB00]/80 shadow-[0_3px_0_#1B2836]">
                 <img
                   src={effectiveBranding.logoDataUrl}
                   alt={effectiveBranding.companyName || 'Company Logo'}
@@ -268,11 +268,11 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                 />
               </div>
             ) : (
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#0A6ED1] to-[#004A99] flex items-center justify-center text-[#F0AB00] shrink-0 ring-1 ring-[#F0AB00]/60">
-                <Building2 className="w-5 h-5" />
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#0A6ED1] to-[#004A99] flex items-center justify-center text-[#F0AB00] shrink-0 ring-2 ring-[#F0AB00]/80 shadow-[0_3px_0_#1B2836]">
+                <Building2 className="w-6 h-6" />
               </div>
             )}
-            <span className="text-sm sm:text-base font-extrabold tracking-tight text-white truncate">
+            <span className="text-base sm:text-lg font-extrabold tracking-tight text-white truncate">
               {effectiveBranding?.companyName || 'AWP Dispatch & Gate Control'}
             </span>
           </div>
@@ -280,36 +280,36 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3.5 rounded-lg bg-[#243647] hover:bg-[#1B2A38] border border-[#4A6580] text-xs font-bold text-white whitespace-nowrap shrink-0 cursor-pointer transition"
+            className="app-btn-sm h-10 px-4 rounded-xl bg-[#243647] hover:bg-[#1B2A38] border border-[#526E8A] text-white shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+            <ArrowLeft className="w-4 h-4 shrink-0 text-[#F0AB00]" />
             <span>{backLabel}</span>
           </button>
         </div>
       </header>
 
       {/* Main Content Container */}
-      <main className="max-w-5xl mx-auto w-full px-4 sm:px-6 py-5 sm:py-7 flex-1 space-y-5">
+      <main className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 flex-1 space-y-6">
         {/* Search & Intro Card */}
-        <section className="bg-white rounded-2xl border border-[#D1DBE5] shadow-xs p-5 sm:p-6 space-y-4">
+        <section className="surface-3d rounded-3xl p-6 sm:p-8 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5ECF4] pb-4">
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-[#1C2833] tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-black text-[#1C2833] tracking-tight">
                 Driver Live Loading Status
               </h1>
-              <p className="text-xs sm:text-sm text-[#475E75] mt-1">
+              <p className="text-sm text-[#475E75] mt-1">
                 Enter your Vehicle / Truck Number submitted when your gate ticket or loading slip was generated to check your live loading turn.
               </p>
             </div>
-            <div className="text-xs text-[#5B738B] flex items-center gap-2 shrink-0">
+            <div className="text-xs font-bold text-[#354A5F] bg-[#EFF4F9] border border-[#C8D6E5] px-3.5 py-2 rounded-xl inset-3d flex items-center gap-2 shrink-0">
               <Clock className="w-4 h-4 text-[#0A6ED1] shrink-0" />
               <span>Valid for 12 hours from slip generation</span>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3.5">
             <div className="relative flex-1">
-              <Truck className="w-4 h-4 text-[#5B738B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Truck className="w-5 h-5 text-[#5B738B] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="driver-truck-lookup"
                 type="text"
@@ -317,14 +317,14 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                 value={truckInput}
                 onChange={(e) => setTruckInput(e.target.value.toUpperCase())}
                 placeholder="Enter Vehicle / Truck Number (e.g. 5275 AXG)"
-                className="w-full min-h-[48px] pl-10 pr-10 py-2.5 text-sm sm:text-base rounded-xl border border-[#BCC8D4] bg-[#F7F9FB] text-[#1C2833] font-semibold uppercase tracking-wide focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] focus:border-[#0A6ED1]"
+                className="w-full min-h-[52px] pl-11 pr-11 py-3 text-base sm:text-lg rounded-xl border border-[#B9C8D8] bg-[#F4F7FB] text-[#1C2833] font-bold uppercase tracking-wide inset-3d focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] focus:border-[#0A6ED1]"
               />
               {truckInput && (
                 <button
                   type="button"
                   onClick={handleClear}
                   aria-label="Clear Vehicle / Truck Number"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-lg text-[#5B738B] hover:text-[#1C2833] hover:bg-[#E5ECF4] cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg text-[#5B738B] hover:text-[#1C2833] hover:bg-[#E5ECF4] cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -334,16 +334,16 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="min-h-[48px] px-6 rounded-xl bg-[#0A6ED1] hover:bg-[#085CAF] disabled:opacity-60 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition whitespace-nowrap shrink-0"
+              className="btn-3d min-h-[52px] px-7 rounded-xl bg-gradient-to-b from-[#0C78E2] to-[#085CAF] hover:from-[#0E82F2] hover:to-[#0A6ED1] disabled:opacity-60 text-white font-extrabold text-base flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" />
                   <span>Checking...</span>
                 </>
               ) : (
                 <>
-                  <Search className="w-4 h-4 shrink-0" />
+                  <Search className="w-5 h-5 shrink-0" />
                   <span>Check Live Status</span>
                 </>
               )}
@@ -353,9 +353,9 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
           {errorMsg && (
             <div
               role="alert"
-              className="bg-[#FFF0F0] border border-[#F4B8B8] text-[#BB0000] px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold flex items-start gap-2.5"
+              className="bg-[#FFF0F0] border border-[#F4B8B8] text-[#BB0000] px-4 py-3 rounded-xl text-sm font-semibold flex items-start gap-2.5"
             >
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#BB0000]" />
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-[#BB0000]" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -363,14 +363,14 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
 
         {/* Empty Initial State */}
         {!result && !loading && (
-          <section className="bg-white rounded-2xl border border-[#D1DBE5] p-6 sm:p-8 text-center space-y-3">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EBF5FF] border border-[#B8DCFF] flex items-center justify-center text-[#0A6ED1]">
-              <Truck className="w-7 h-7" />
+          <section className="surface-3d rounded-3xl p-8 sm:p-10 text-center space-y-3.5">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-[#EBF5FF] to-[#DBEAFE] border border-[#93C5FD] flex items-center justify-center text-[#0A6ED1] shadow-[0_3px_0_#BFDBFE]">
+              <Truck className="w-8 h-8" />
             </div>
-            <h2 className="text-base sm:text-lg font-extrabold text-[#1C2833]">
+            <h2 className="text-lg sm:text-xl font-black text-[#1C2833]">
               Check Your Gate &amp; Loading Queue Turn
             </h2>
-            <p className="text-xs sm:text-sm text-[#5B738B] max-w-xl mx-auto leading-relaxed">
+            <p className="text-sm text-[#5B738B] max-w-xl mx-auto leading-relaxed">
               Once your gate entry slip is created, enter your Vehicle / Truck Number above to view your assigned gate, how many trucks are ahead of you, and live loading updates. For security, status links automatically expire 12 hours after ticket creation.
             </p>
           </section>
@@ -378,14 +378,14 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
 
         {/* Not Found State */}
         {result && !result.found && (
-          <section className="bg-white rounded-2xl border border-[#D1DBE5] p-6 sm:p-8 text-center space-y-3">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#FEF7F1] border border-[#F9C99B] flex items-center justify-center text-[#E9730C]">
-              <AlertCircle className="w-7 h-7" />
+          <section className="surface-3d rounded-3xl p-8 sm:p-10 text-center space-y-3.5">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-[#FEF7F1] border border-[#F9C99B] flex items-center justify-center text-[#E9730C] shadow-[0_3px_0_#FDE68A]">
+              <AlertCircle className="w-8 h-8" />
             </div>
-            <h2 className="text-base sm:text-lg font-extrabold text-[#1C2833]">
+            <h2 className="text-lg sm:text-xl font-black text-[#1C2833]">
               No Active Slip Found
             </h2>
-            <p className="text-xs sm:text-sm text-[#475E75] max-w-lg mx-auto leading-relaxed">
+            <p className="text-sm text-[#475E75] max-w-lg mx-auto leading-relaxed">
               {result.message ||
                 'No loading ticket or slip matches this Vehicle / Truck Number. Please check the truck number entered during gate entry or confirm with Gate Security.'}
             </p>
@@ -394,14 +394,14 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
 
         {/* Expired (12 Hours Elapsed) State */}
         {result && result.found && showExpiredState && (
-          <section className="bg-white rounded-2xl border border-[#F4B8B8] p-6 sm:p-8 text-center space-y-3">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#FFF0F0] border border-[#F4B8B8] flex items-center justify-center text-[#BB0000]">
-              <TimerOff className="w-7 h-7" />
+          <section className="surface-3d rounded-3xl border-[#F4B8B8] p-8 sm:p-10 text-center space-y-3.5">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-[#FFF0F0] border border-[#F4B8B8] flex items-center justify-center text-[#BB0000] shadow-[0_3px_0_#FECACA]">
+              <TimerOff className="w-8 h-8" />
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-[#BB0000]">
+            <h2 className="text-xl sm:text-2xl font-black text-[#BB0000]">
               Status Expired (12-Hour Limit)
             </h2>
-            <p className="text-xs sm:text-sm text-[#475E75] max-w-lg mx-auto leading-relaxed">
+            <p className="text-sm text-[#475E75] max-w-lg mx-auto leading-relaxed">
               {result.message ||
                 'Your live loading status was valid only for 12 hours from slip generation and has now expired.'}
             </p>
@@ -418,11 +418,13 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
 
         {/* Active Live Status State (Within 12 Hours) */}
         {result && result.found && !showExpiredState && ticket && queue && statusMeta && (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Hero Turn Banner */}
-            <section className={`rounded-2xl border ${statusMeta.toneBorder} ${statusMeta.toneBg} p-5 sm:p-6 space-y-4`}>
+            <section
+              className={`rounded-3xl border ${statusMeta.toneBorder} ${statusMeta.toneBg} p-6 sm:p-7 space-y-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_5px_0_#C5D3E2,0_16px_34px_-10px_rgba(24,42,64,0.16)]`}
+            >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#475E75]">
                     <span className={`${statusMeta.toneText} font-extrabold`}>{statusMeta.label}</span>
                     <span aria-hidden="true">·</span>
@@ -430,10 +432,10 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                     <span aria-hidden="true">·</span>
                     <span className="tabular-nums">{formatDisplayDate(ticket.date)}</span>
                   </div>
-                  <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${statusMeta.toneText}`}>
+                  <h2 className={`text-2xl sm:text-3xl font-black tracking-tight ${statusMeta.toneText}`}>
                     {statusMeta.headline}
                   </h2>
-                  <p className="text-xs sm:text-sm text-[#354A5F] leading-relaxed max-w-2xl">
+                  <p className="text-sm text-[#354A5F] leading-relaxed max-w-2xl">
                     {statusMeta.subtext}
                   </p>
                 </div>
@@ -443,13 +445,13 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                     type="button"
                     onClick={() => performLookup(searchedTruck || truckInput, true)}
                     disabled={refreshing}
-                    className="min-h-[44px] px-4 rounded-xl bg-white hover:bg-[#EFF4F9] border border-[#BCC8D4] text-xs font-bold text-[#1C2833] flex items-center gap-2 cursor-pointer transition shadow-xs"
+                    className="app-btn bg-white hover:bg-[#EFF4F9] border border-[#BCC8D4] text-[#1C2833]"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 text-[#0A6ED1] ${refreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-4 h-4 text-[#0A6ED1] ${refreshing ? 'animate-spin' : ''}`} />
                     <span>{refreshing ? 'Refreshing...' : 'Refresh Live'}</span>
                   </button>
                   {lastUpdatedAt && (
-                    <span className="text-[11px] text-[#5B738B] tabular-nums">
+                    <span className="text-xs text-[#5B738B] tabular-nums">
                       Updated {new Date(lastUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </span>
                   )}
@@ -457,32 +459,32 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
               </div>
 
               {/* 4 Key Live Turn Metrics */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-2 border-t border-black/10">
-                <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5">
-                  <span className="text-[11px] font-bold text-[#5B738B] block">Assigned Gate</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <DoorOpen className="w-5 h-5 text-[#0A6ED1] shrink-0" />
-                    <span className="text-lg sm:text-xl font-black text-[#1C2833] truncate">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-3 border-t border-black/10">
+                <div className="surface-3d surface-3d-hover rounded-2xl p-4">
+                  <span className="text-xs font-bold text-[#5B738B] block">Assigned Gate</span>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <DoorOpen className="w-6 h-6 text-[#0A6ED1] shrink-0" />
+                    <span className="text-xl sm:text-2xl font-black text-[#1C2833] truncate">
                       {queue.gateNumber || ticket.gateNumber || '—'}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5">
-                  <span className="text-[11px] font-bold text-[#5B738B] block">Trucks Ahead of You</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-[#E9730C] shrink-0" />
-                    <span className="text-lg sm:text-xl font-black text-[#1C2833] tabular-nums">
+                <div className="surface-3d surface-3d-hover rounded-2xl p-4">
+                  <span className="text-xs font-bold text-[#5B738B] block">Trucks Ahead of You</span>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <Truck className="w-6 h-6 text-[#E9730C] shrink-0" />
+                    <span className="text-xl sm:text-2xl font-black text-[#1C2833] tabular-nums">
                       {ticket.status === 'completed' || ticket.status === 'cancelled' ? '0' : queue.trucksAhead}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5">
-                  <span className="text-[11px] font-bold text-[#5B738B] block">Live Gate Position</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Megaphone className="w-5 h-5 text-[#107E3E] shrink-0" />
-                    <span className="text-lg sm:text-xl font-black text-[#1C2833] tabular-nums">
+                <div className="surface-3d surface-3d-hover rounded-2xl p-4">
+                  <span className="text-xs font-bold text-[#5B738B] block">Live Gate Position</span>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <Megaphone className="w-6 h-6 text-[#107E3E] shrink-0" />
+                    <span className="text-xl sm:text-2xl font-black text-[#1C2833] tabular-nums">
                       {ticket.status === 'completed'
                         ? 'Done'
                         : ticket.status === 'cancelled'
@@ -494,11 +496,11 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5">
-                  <span className="text-[11px] font-bold text-[#5B738B] block">12-Hour Validity Left</span>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-[#0A6ED1] shrink-0" />
-                    <span className="text-base sm:text-lg font-black text-[#0854A0] tabular-nums">
+                <div className="surface-3d surface-3d-hover rounded-2xl p-4">
+                  <span className="text-xs font-bold text-[#5B738B] block">12-Hour Validity Left</span>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <Clock className="w-6 h-6 text-[#0A6ED1] shrink-0" />
+                    <span className="text-lg sm:text-xl font-black text-[#0854A0] tabular-nums">
                       {formatRemainingDuration(remainingMs)}
                     </span>
                   </div>
@@ -506,7 +508,7 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
               </div>
 
               {queue.currentlyLoadingTruck && ticket.status !== 'under_loading' && ticket.status !== 'completed' && (
-                <div className="text-xs text-[#354A5F] bg-white/80 border border-[#D1DBE5] rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs sm:text-sm text-[#354A5F] bg-white/90 border border-[#C8D6E5] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 inset-3d">
                   <span>
                     Currently loading at <strong>{queue.gateNumber}</strong>:{' '}
                     <strong className="text-[#1C2833] tabular-nums">{queue.currentlyLoadingTruck}</strong>
@@ -519,40 +521,40 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
             </section>
 
             {/* 4-Step Loading Progress + Slip Details Split Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-stretch">
               {/* Loading Timeline */}
-              <section className="lg:col-span-2 bg-white rounded-2xl border border-[#D1DBE5] p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-[#E5ECF4] pb-3">
-                  <h3 className="text-sm font-extrabold text-[#1C2833]">Loading Progress</h3>
-                  <span className="text-xs text-[#5B738B] tabular-nums">Daily Seq #{ticket.sequenceNumber}</span>
+              <section className="lg:col-span-2 surface-3d rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-[#E5ECF4] pb-3.5">
+                  <h3 className="text-base font-black text-[#1C2833]">Loading Progress</h3>
+                  <span className="text-xs font-bold text-[#5B738B] tabular-nums">Daily Seq #{ticket.sequenceNumber}</span>
                 </div>
 
-                <ol className="space-y-3.5">
+                <ol className="space-y-4">
                   {timelineSteps.map((step, idx) => {
                     const isDone = ticket.status === 'completed' ? true : idx < statusMeta.stepIndex;
                     const isCurrent = ticket.status !== 'cancelled' && ticket.status !== 'completed' && idx === statusMeta.stepIndex;
                     return (
-                      <li key={step.label} className="flex items-start gap-3">
+                      <li key={step.label} className="flex items-start gap-3.5">
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 border ${
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 border shadow-[0_2px_0_rgba(15,23,42,0.16)] ${
                             isDone
                               ? 'bg-[#107E3E] text-white border-[#107E3E]'
                               : isCurrent
                               ? 'bg-[#0A6ED1] text-white border-[#0A6ED1]'
-                              : 'bg-[#F3F6FA] text-[#5B738B] border-[#BCC8D4]'
+                              : 'bg-[#EFF4F9] text-[#5B738B] border-[#BCC8D4]'
                           }`}
                         >
                           {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p
-                            className={`text-sm font-bold ${
+                            className={`text-sm font-extrabold ${
                               isDone || isCurrent ? 'text-[#1C2833]' : 'text-[#5B738B]'
                             }`}
                           >
                             {step.label}
                           </p>
-                          <p className="text-xs text-[#5B738B] tabular-nums">{step.time}</p>
+                          <p className="text-xs text-[#5B738B] tabular-nums mt-0.5">{step.time}</p>
                         </div>
                       </li>
                     );
@@ -561,23 +563,23 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
               </section>
 
               {/* Vehicle & Slip Information */}
-              <section className="lg:col-span-3 bg-white rounded-2xl border border-[#D1DBE5] p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-[#E5ECF4] pb-3">
-                  <h3 className="text-sm font-extrabold text-[#1C2833]">Gate Ticket &amp; Slip Details</h3>
-                  <span className="text-xs text-[#5B738B] flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#0A6ED1]" />
+              <section className="lg:col-span-3 surface-3d rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-[#E5ECF4] pb-3.5">
+                  <h3 className="text-base font-black text-[#1C2833]">Gate Ticket &amp; Slip Details</h3>
+                  <span className="text-xs font-bold text-[#5B738B] flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-[#0A6ED1]" />
                     <span>{ticket.hasLoadingSlip ? 'Slip Prepared' : 'Slip Pending'}</span>
                   </span>
                 </div>
 
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3.5 text-sm">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
                   <div>
                     <dt className="text-xs font-semibold text-[#5B738B]">Driver Name</dt>
-                    <dd className="font-extrabold text-[#1C2833] mt-0.5">{ticket.driverName || '—'}</dd>
+                    <dd className="text-base font-black text-[#1C2833] mt-0.5">{ticket.driverName || '—'}</dd>
                   </div>
                   <div>
                     <dt className="text-xs font-semibold text-[#5B738B]">Truck / Vehicle Number</dt>
-                    <dd className="font-extrabold text-[#1C2833] mt-0.5 tabular-nums">{ticket.truckNumber || '—'}</dd>
+                    <dd className="text-base font-black text-[#1C2833] mt-0.5 tabular-nums">{ticket.truckNumber || '—'}</dd>
                   </div>
                   <div>
                     <dt className="text-xs font-semibold text-[#5B738B]">Ticket Number</dt>
@@ -594,7 +596,7 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                   <div>
                     <dt className="text-xs font-semibold text-[#5B738B]">Destination Place</dt>
                     <dd className="font-semibold text-[#1C2833] mt-0.5 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-[#5B738B] shrink-0" />
+                      <MapPin className="w-4 h-4 text-[#5B738B] shrink-0" />
                       <span>{ticket.destinationPlace || '—'}</span>
                     </dd>
                   </div>
@@ -612,7 +614,7 @@ export const DriverStatusView: React.FC<DriverStatusViewProps> = ({
                   </div>
                 </dl>
 
-                <div className="pt-3 border-t border-[#E5ECF4] flex items-center gap-2 text-xs text-[#5B738B]">
+                <div className="pt-3.5 border-t border-[#E5ECF4] flex items-center gap-2 text-xs text-[#5B738B]">
                   <ShieldCheck className="w-4 h-4 text-[#107E3E] shrink-0" />
                   <span>
                     Status lookup stays active for 12 hours from slip/ticket generation and refreshes live every 15 seconds.

@@ -96,9 +96,9 @@ export const TicketTable: React.FC<TicketTableProps> = ({
 
   if (tickets.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-[#D1DBE5] p-12 text-center text-[#5B738B] shadow-xs">
-        <p className="text-base font-bold text-[#354A5F] mb-1">No vehicle loading records found for this date</p>
-        <p className="text-xs text-[#5B738B]">
+      <div className="surface-3d rounded-2xl p-14 text-center text-[#5B738B]">
+        <p className="text-lg font-black text-[#263748] mb-1.5">No vehicle loading records found for this date</p>
+        <p className="text-sm text-[#5B738B]">
           Click "+ New Gate Ticket" to register a new loading vehicle.
         </p>
       </div>
@@ -106,31 +106,31 @@ export const TicketTable: React.FC<TicketTableProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden">
+    <div className="surface-3d rounded-2xl overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-left text-xs">
+        <table className="w-full border-collapse text-left text-[13px]">
           <thead>
-            <tr className="bg-[#354A5F] text-white text-[11px] uppercase tracking-wider font-bold border-b-2 border-[#0A6ED1]">
+            <tr className="bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white text-[11.5px] uppercase tracking-wider font-extrabold border-b-2 border-[#0A6ED1]">
               <th
                 onClick={() => setSortAsc(!sortAsc)}
-                className="py-3 px-3 text-center w-16 cursor-pointer hover:bg-[#2B3E50] transition select-none"
+                className="py-4 px-3.5 text-center w-20 cursor-pointer hover:bg-[#2B3E50] transition select-none"
                 title="Click to toggle Ascending (1, 2, 3...) or Descending"
               >
                 <div className="flex items-center justify-center gap-1">
                   <span>Seq</span>
-                  <span className="text-[10px] text-[#F0AB00] font-mono font-bold">
+                  <span className="text-[10.5px] text-[#F0AB00] font-mono font-bold">
                     {sortAsc ? '▲ #1' : '▼ #9'}
                   </span>
                 </div>
               </th>
-              <th className="py-3 px-3">Ticket Number</th>
-              <th className="py-3 px-3">Gate & Pos</th>
-              <th className="py-3 px-3">Vehicle & Driver</th>
-              <th className="py-3 px-3">Destination</th>
-              <th className="py-3 px-3 text-center">Status</th>
-              <th className="py-3 px-3">Loading Slip Summary</th>
-              <th className="py-3 px-3">Timestamps</th>
-              <th className="py-3 px-3 text-center min-w-[280px]">Quick Actions</th>
+              <th className="py-4 px-3.5">Ticket Number</th>
+              <th className="py-4 px-3.5">Gate & Pos</th>
+              <th className="py-4 px-3.5">Vehicle & Driver</th>
+              <th className="py-4 px-3.5">Destination</th>
+              <th className="py-4 px-3.5 text-center">Status</th>
+              <th className="py-4 px-3.5">Loading Slip Summary</th>
+              <th className="py-4 px-3.5">Timestamps</th>
+              <th className="py-4 px-3.5 text-center min-w-[290px]">Quick Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E3EAF2] font-sans">
@@ -148,30 +148,32 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                   }`}
                 >
                   {/* Daily Sequence*/ }
-                  <td className="py-3 px-3 text-center font-black text-sm text-[#354A5F] tabular-nums">
-                    #{t.sequenceNumber}
+                  <td className="py-3.5 px-3.5 text-center font-black text-base text-[#263748] tabular-nums">
+                    <span className="inline-flex items-center justify-center min-w-[2.25rem] h-8 px-2 rounded-lg bg-[#EFF4F9] border border-[#C8D6E5] inset-3d">
+                      #{t.sequenceNumber}
+                    </span>
                   </td>
 
                   {/* Ticket Number*/ }
-                  <td className="py-3 px-3">
-                    <span className="font-extrabold text-[#0A6ED1] block font-mono">{t.ticketNumber}</span>
+                  <td className="py-3.5 px-3.5">
+                    <span className="font-extrabold text-[#0A6ED1] block font-mono text-[13px]">{t.ticketNumber}</span>
                     {canPrint && (
                       <button
                         onClick={() => onPrintTicket(t)}
-                        className="text-[10px] text-[#5B738B] hover:text-[#0A6ED1] font-medium inline-flex items-center gap-0.5 cursor-pointer mt-0.5"
+                        className="text-[11px] text-[#5B738B] hover:text-[#0A6ED1] font-semibold inline-flex items-center gap-1 cursor-pointer mt-1"
                       >
-                        <Printer className="w-3 h-3" />
+                        <Printer className="w-3.5 h-3.5" />
                         <span>Print Token</span>
                       </button>
                     )}
                   </td>
 
                   {/* Gate Number & Gate Sequence Number*/ }
-                  <td className="py-3 px-3">
-                    <div className="inline-block bg-[#EFF4F9] border border-[#BCC8D4] px-2 py-0.5 rounded text-[#354A5F] font-black text-xs">
+                  <td className="py-3.5 px-3.5">
+                    <div className="inline-block bg-gradient-to-b from-white to-[#EFF4F9] border border-[#C5D3E2] px-2.5 py-1 rounded-lg text-[#263748] font-black text-xs shadow-xs">
                       {t.gateNumber}
                     </div>
-                    <p className="text-[11px] font-bold text-[#0A6ED1] mt-0.5">
+                    <p className="text-[11.5px] font-bold text-[#0A6ED1] mt-1">
                       {t.status === 'under_loading'
                         ? 'In Progress'
                         : `Gate Pos: ${t.gateSequenceNumber}`}
@@ -179,20 +181,20 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                   </td>
 
                   {/* Truck & Driver */ }
-                  <td className="py-3 px-3">
-                    <p className="font-black text-[#1C2833] tracking-wide text-xs">{t.truckNumber}</p>
-                    <p className="text-[11px] text-[#354A5F] font-medium">{t.driverName}</p>
-                    <p className="text-[10.5px] text-[#107E3E] font-mono font-bold flex items-center gap-1">
+                  <td className="py-3.5 px-3.5">
+                    <p className="font-black text-[#1C2833] tracking-wide text-sm">{t.truckNumber}</p>
+                    <p className="text-xs text-[#354A5F] font-semibold mt-0.5">{t.driverName}</p>
+                    <p className="text-[11.5px] text-[#107E3E] font-mono font-bold flex items-center gap-1 mt-0.5">
                       <span>{formatSaudiPhoneNumber(t.driverPhone)}</span>
                     </p>
                   </td>
 
                   {/* Destination */}
-                  <td className="py-3 px-3">
-                    <span className="font-semibold text-[#1C2833] block text-[11px]">
+                  <td className="py-3.5 px-3.5">
+                    <span className="font-bold text-[#1C2833] block text-xs">
                       {t.destinationPlace || 'N/A'}
                     </span>
-                    <span className="text-[10px] text-[#5B738B] truncate max-w-[120px] block">
+                    <span className="text-[11px] text-[#5B738B] truncate max-w-[140px] block mt-0.5">
                       {t.transporterName || 'Self Transport'}
                     </span>
                   </td>

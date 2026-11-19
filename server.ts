@@ -107,20 +107,23 @@ function getPublicBranding(): { companyName?: string; companySubtitle?: string; 
   }
 }
 
-function validateLogoDataUrl(val: unknown): { ok: true; value: string } | { ok: false; error: string } {
+function validateLogoDataUrl(
+  val: unknown,
+  label = 'Logo'
+): { ok: true; value: string } | { ok: false; error: string } {
   if (val === undefined || val === null || val === '') {
     return { ok: true, value: '' };
   }
   if (typeof val !== 'string') {
-    return { ok: false, error: 'Invalid logo image format.' };
+    return { ok: false, error: `Invalid ${label.toLowerCase()} image format.` };
   }
   const trimmed = val.trim();
   if (!trimmed) return { ok: true, value: '' };
   if (trimmed.length > 2_000_000) {
-    return { ok: false, error: 'Logo image payload exceeds maximum allowed size.' };
+    return { ok: false, error: `${label} image payload exceeds maximum allowed size.` };
   }
   if (!/^data:image\/(png|jpeg|jpg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
-    return { ok: false, error: 'Logo must be a valid base64 PNG, JPG, WebP, GIF, or SVG image.' };
+    return { ok: false, error: `${label} must be a valid base64 PNG, JPG, WebP, GIF, or SVG image.` };
   }
   return { ok: true, value: trimmed };
 }
@@ -919,7 +922,7 @@ app.get('/api/admin/users', requireAuth, requirePasswordChanged, requireAdmin, (
   const rows = db
     .prepare(
       `SELECT u.id, u.username, u.full_name, u.email, u.role_id, u.is_active,
-              u.must_change_password, u.last_login_at, u.created_by, u.created_at, u.updated_at,
+              u.must_change_password, u.last_login_at, u.signature_data_url, u.created_by, u.created_at, u.updated_at,
               r.name as role_name, r.display_name as role_display_name,
               (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > ?) as active_sessions
        FROM users u
@@ -935,6 +938,7 @@ app.get('/api/admin/users', requireAuth, requirePasswordChanged, requireAdmin, (
     is_active: number;
     must_change_password: number;
     last_login_at: number | null;
+    signature_data_url: string | null;
     created_by: string | null;
     created_at: number;
     updated_at: number;
@@ -954,6 +958,7 @@ app.get('/api/admin/users', requireAuth, requirePasswordChanged, requireAdmin, (
     isActive: row.is_active === 1,
     mustChangePassword: row.must_change_password === 1,
     lastLoginAt: row.last_login_at,
+    signatureDataUrl: row.signature_data_url || '',
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -965,7 +970,13 @@ app.get('/api/admin/users', requireAuth, requirePasswordChanged, requireAdmin, (
 });
 
 app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, requireAdmin, async (req: Request, res: Response) => {
-  const { username, fullName, email, temporaryPassword, roleName, isActive, permissions } = req.body || {};
+  const { username, fullName, email, temporaryPassword, roleName, isActive, permissions, signatureDataUrl } = req.body || {};
+
+  const sigCheck = validateLogoDataUrl(signatureDataUrl, 'Signature');
+  if (!sigCheck.ok) {
+    res.status(400).json({ error: sigCheck.error });
+    return;
+  }
 
   const usernameErr = validateUsername(String(username || ''));
   if (usernameErr) {
@@ -1012,8 +1023,8 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
 
   const createTx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`
+      `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, signature_data_url, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
     ).run(
       userId,
       cleanUsername,
@@ -1022,6 +1033,7 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
       passwordHash,
       roleRow.id,
       activeFlag,
+      sigCheck.value,
       req.auth!.user.username,
       now,
       now
@@ -1132,7 +1144,18 @@ app.patch('/api/admin/users/:id', requireAuth, requirePasswordChanged, requireCs
     return;
   }
 
-  const { fullName, email, roleName, isActive } = req.body || {};
+  const { fullName, email, roleName, isActive, signatureDataUrl } = req.body || {};
+
+  let nextSignatureDataUrl = target.signatureDataUrl || '';
+  const hasSignatureField = Object.prototype.hasOwnProperty.call(req.body || {}, 'signatureDataUrl');
+  if (hasSignatureField) {
+    const sigCheck = validateLogoDataUrl(signatureDataUrl, 'Signature');
+    if (!sigCheck.ok) {
+      res.status(400).json({ error: sigCheck.error });
+      return;
+    }
+    nextSignatureDataUrl = sigCheck.value;
+  }
 
   // Prevent self-lockout / self-demotion
   if (targetId === req.auth!.user.id) {
@@ -1176,11 +1199,14 @@ app.patch('/api/admin/users/:id', requireAuth, requirePasswordChanged, requireCs
   }
 
   db.transaction(() => {
-    db.prepare(`UPDATE users SET full_name = ?, email = ?, role_id = ?, is_active = ?, updated_at = ? WHERE id = ?`).run(
+    db.prepare(
+      `UPDATE users SET full_name = ?, email = ?, role_id = ?, is_active = ?, signature_data_url = ?, updated_at = ? WHERE id = ?`
+    ).run(
       nextFullName,
       nextEmail,
       roleRow.id,
       nextActive,
+      nextSignatureDataUrl,
       Date.now(),
       targetId
     );
@@ -1207,12 +1233,86 @@ app.patch('/api/admin/users/:id', requireAuth, requirePasswordChanged, requireCs
     action: actionType,
     targetType: 'user',
     targetId,
-    details: `Updated user "${target.username}" (role: ${nextRoleName}, active: ${nextActive === 1})`,
+    details: `Updated user "${target.username}" (role: ${nextRoleName}, active: ${nextActive === 1}${hasSignatureField ? (nextSignatureDataUrl ? ', signature updated' : ', signature removed') : ''})`,
     ipAddress: getClientIp(req),
   });
 
   res.json({ user: getSafeUserById(targetId) });
 });
+
+app.put(
+  '/api/admin/users/:id/signature',
+  requireAuth,
+  requirePasswordChanged,
+  requireCsrf,
+  requireAdmin,
+  (req: Request, res: Response) => {
+    const targetId = req.params.id;
+    const target = getSafeUserById(targetId);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    const sigCheck = validateLogoDataUrl(req.body?.signatureDataUrl, 'Signature');
+    if (!sigCheck.ok) {
+      res.status(400).json({ error: sigCheck.error });
+      return;
+    }
+    if (!sigCheck.value) {
+      res.status(400).json({ error: 'Signature image is required.' });
+      return;
+    }
+
+    db.prepare(`UPDATE users SET signature_data_url = ?, updated_at = ? WHERE id = ?`).run(
+      sigCheck.value,
+      Date.now(),
+      targetId
+    );
+
+    logAudit({
+      actorUserId: req.auth!.user.id,
+      actorUsername: req.auth!.user.username,
+      action: 'USER_SIGNATURE_UPDATED',
+      targetType: 'user',
+      targetId,
+      details: `Admin uploaded/updated digital signature for user "${target.username}"`,
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({ user: getSafeUserById(targetId) });
+  }
+);
+
+app.delete(
+  '/api/admin/users/:id/signature',
+  requireAuth,
+  requirePasswordChanged,
+  requireCsrf,
+  requireAdmin,
+  (req: Request, res: Response) => {
+    const targetId = req.params.id;
+    const target = getSafeUserById(targetId);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    db.prepare(`UPDATE users SET signature_data_url = '', updated_at = ? WHERE id = ?`).run(Date.now(), targetId);
+
+    logAudit({
+      actorUserId: req.auth!.user.id,
+      actorUsername: req.auth!.user.username,
+      action: 'USER_SIGNATURE_DELETED',
+      targetType: 'user',
+      targetId,
+      details: `Admin deleted digital signature for user "${target.username}"`,
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({ user: getSafeUserById(targetId) });
+  }
+);
 
 app.put(
   '/api/admin/users/:id/permissions',
@@ -1915,12 +2015,23 @@ app.patch(
       );
       const isNewLoadingSlip = Boolean(cleanUpdates.loadingSlip) && !hadSlipBefore;
 
+      // Authoritatively attach authenticated user's full name & Admin-managed digital signature when loading slip is saved
+      const cleanUpdatesWithUserSig = { ...cleanUpdates };
+      if (cleanUpdatesWithUserSig.loadingSlip && !prev.loadingSlip?.isLocked) {
+        cleanUpdatesWithUserSig.loadingSlip = {
+          ...cleanUpdatesWithUserSig.loadingSlip,
+          storeInchargeUserId: req.auth!.user.id,
+          storeInchargeName: req.auth!.user.fullName,
+          storeInchargeSignatureDataUrl: req.auth!.user.signatureDataUrl || '',
+        };
+      }
+
       // Preserve 'Waiting in Queue' when newly generating a Loading Slip unless explicitly changed
-      const requestedStatus = typeof cleanUpdates.status === 'string' ? cleanUpdates.status : undefined;
+      const requestedStatus = typeof cleanUpdatesWithUserSig.status === 'string' ? cleanUpdatesWithUserSig.status : undefined;
       const hasManualStatusChange = Boolean(requestedStatus && requestedStatus !== prev.status);
       const merged = normalizeTicketRecord({
         ...prev,
-        ...cleanUpdates,
+        ...cleanUpdatesWithUserSig,
         id: prev.id,
         ticketNumber: prev.ticketNumber,
         sequenceNumber: prev.sequenceNumber,
@@ -2857,12 +2968,19 @@ app.put(
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
     const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
-    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl);
+    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl, 'Logo');
     if (!logoCheck.ok) {
       res.status(400).json({ error: logoCheck.error });
       return;
     }
     newSettings.logoDataUrl = logoCheck.value;
+
+    const signatureCheck = validateLogoDataUrl(newSettings.storeInchargeSignatureDataUrl, 'Signature');
+    if (!signatureCheck.ok) {
+      res.status(400).json({ error: signatureCheck.error });
+      return;
+    }
+    newSettings.storeInchargeSignatureDataUrl = signatureCheck.value;
 
     const now = Date.now();
     db.prepare(`INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`).run(
@@ -2893,12 +3011,19 @@ app.put(
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
     const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
-    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl);
+    const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl, 'Logo');
     if (!logoCheck.ok) {
       res.status(400).json({ error: logoCheck.error });
       return;
     }
     newSettings.logoDataUrl = logoCheck.value;
+
+    const signatureCheck = validateLogoDataUrl(newSettings.storeInchargeSignatureDataUrl, 'Signature');
+    if (!signatureCheck.ok) {
+      res.status(400).json({ error: signatureCheck.error });
+      return;
+    }
+    newSettings.storeInchargeSignatureDataUrl = signatureCheck.value;
 
     const now = Date.now();
     db.transaction(() => {
@@ -3097,6 +3222,11 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
 app.use('/api/liquid', liquidRouter);
 app.use('/api/ex-factory', exFactoryRouter);
 
+// Health check endpoint for Hostinger / load balancers
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({ ok: true, status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Reject any unknown /api route cleanly with JSON 404
 app.use('/api', (_req: Request, res: Response) => {
   res.status(404).json({ error: 'API endpoint not found.' });
@@ -3124,7 +3254,7 @@ async function startServer() {
     }
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
     try {
       processAutoLoadingTransitions();
@@ -3139,6 +3269,22 @@ async function startServer() {
       }
     }, 30000);
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`Received ${signal}, shutting down gracefully...`);
+    server.close(() => {
+      try {
+        db.close();
+      } catch (err) {
+        console.error('Error closing SQLite database:', err);
+      }
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 5000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer().catch((err) => {

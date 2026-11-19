@@ -25,7 +25,9 @@ export interface LoadingSlipData {
   preparedBy: string;
   checkedBy: string; // Now used for Forklift Operator / Loaded By
   loadedBy?: string;  // Forklift Operator / Loaded By
+  storeInchargeUserId?: string; // User ID of Store Incharge who generated/signed the slip
   storeInchargeName?: string; // Logged-in user's full name for Store Incharge Signature
+  storeInchargeSignatureDataUrl?: string; // Store Incharge per-user digital signature
   driverSignatureNotes?: string;
   createdAt: string;
   isLocked?: boolean;
@@ -97,6 +99,7 @@ export interface CompanySettings {
   companyName: string;
   companySubtitle: string;
   logoDataUrl?: string;
+  storeInchargeSignatureDataUrl?: string;
   address: string;
   phone: string;
   email: string;
@@ -136,6 +139,7 @@ export interface AuthUser {
   updatedAt: number;
   permissions: string[];
   activeSessionCount?: number;
+  signatureDataUrl?: string;
 }
 
 export interface PermissionOption {

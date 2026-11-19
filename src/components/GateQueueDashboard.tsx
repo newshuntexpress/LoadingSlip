@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TicketRecord, CompanySettings } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import {
@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Timer,
   Activity,
+  XCircle,
+  X,
 } from 'lucide-react';
 
 interface GateQueueDashboardProps {
@@ -135,11 +137,15 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
   canUpdate = true,
   canPrint = true,
 }) => {
+  const [showCancelledModal, setShowCancelledModal] = useState(false);
+
   const dayTickets = tickets.filter((t) => t.date === date);
 
   const underLoadingCount = dayTickets.filter((t) => t.status === 'under_loading').length;
   const calledCount = dayTickets.filter((t) => t.status === 'called').length;
   const waitingCount = dayTickets.filter((t) => t.status === 'waiting').length;
+  const cancelledTickets = dayTickets.filter((t) => t.status === 'cancelled');
+  const cancelledCount = cancelledTickets.length;
   const totalActiveTrucks = underLoadingCount + calledCount + waitingCount;
 
   const processedTickets = dayTickets.filter((t) => t.status === 'completed');
@@ -170,131 +176,140 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
       : '—';
 
   return (
-    <div className="space-y-4">
-      {/* Compact Live Monitor Summary Bar */}
-      <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-[#0A6ED1] via-[#354A5F] to-[#F0AB00]" />
-        <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#E3EAF2] gap-2 sm:gap-0">
-          <div className="flex items-center justify-between sm:pr-4 py-1 sm:py-0">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-[#FEF7F1] text-[#E9730C] border border-[#F9C99B]">
-                <Activity className="w-4 h-4" />
+    <div className="space-y-6">
+      {/* Live Monitor 3D Summary Panel */}
+      <div className="surface-3d rounded-2xl overflow-hidden">
+        <div className="h-1.5 w-full bg-gradient-to-r from-[#0A6ED1] via-[#354A5F] to-[#F0AB00]" />
+        <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#D9E3EE] gap-4 md:gap-0">
+          <div className="flex items-center justify-between md:pr-6 py-1 md:py-0">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-gradient-to-b from-[#FFF3E6] to-[#FDE4C8] text-[#C25900] border border-[#F5B982] shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_3px_0_#E3A972]">
+                <Activity className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-[#354A5F] uppercase tracking-wide block">
+                <span className="text-xs font-extrabold text-[#354A5F] uppercase tracking-wide block">
                   Total Active Trucks
                 </span>
-                <span className="text-[11px] text-[#5B738B]">
+                <span className="text-xs text-[#5B738B]">
                   {underLoadingCount} loading · {calledCount} called · {waitingCount} waiting
                 </span>
               </div>
             </div>
-            <span className="text-xl font-black text-[#C25900] tabular-nums">
+            <span className="text-3xl font-black text-[#C25900] tabular-nums">
               {totalActiveTrucks}
             </span>
           </div>
 
-          <div className="flex items-center justify-between sm:px-4 py-1 sm:py-0">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-[#EBF5FF] text-[#0A6ED1] border border-[#B8DCFF]">
-                <Timer className="w-4 h-4" />
+          <div className="flex items-center justify-between md:px-6 py-1 md:py-0">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-gradient-to-b from-[#EBF5FF] to-[#D4EAFF] text-[#0A6ED1] border border-[#96C8FA] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_3px_0_#85B8EC]">
+                <Timer className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-[#354A5F] uppercase tracking-wide block">
+                <span className="text-xs font-extrabold text-[#354A5F] uppercase tracking-wide block">
                   Average Loading Time
                 </span>
-                <span className="text-[11px] text-[#5B738B]">
+                <span className="text-xs text-[#5B738B]">
                   {loadingDurationsMin.length > 0
                     ? `Across ${loadingDurationsMin.length} timed dispatch${loadingDurationsMin.length === 1 ? '' : 'es'}`
                     : 'No completed timings yet'}
                 </span>
               </div>
             </div>
-            <span className="text-xl font-black text-[#0A6ED1] tabular-nums">
+            <span className="text-3xl font-black text-[#0A6ED1] tabular-nums">
               {avgLoadingTimeLabel}
             </span>
           </div>
 
-          <div className="flex items-center justify-between sm:pl-4 py-1 sm:py-0">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-[#F1FDF6] text-[#107E3E] border border-[#ABE2C2]">
-                <CheckCircle2 className="w-4 h-4" />
+          <div className="flex items-center justify-between md:pl-6 py-1 md:py-0">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-gradient-to-b from-[#EDFCF3] to-[#D4F6E2] text-[#107E3E] border border-[#8AD9AA] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_3px_0_#76C596]">
+                <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-[11px] font-bold text-[#354A5F] uppercase tracking-wide block">
+                <span className="text-xs font-extrabold text-[#354A5F] uppercase tracking-wide block">
                   Total Trucks Processed Today
                 </span>
-                <span className="text-[11px] text-[#5B738B]">
+                <span className="text-xs text-[#5B738B]">
                   {totalProcessedToday} of {dayTickets.length} inward ({completionRate}%)
+                  {cancelledCount > 0 ? ` · ${cancelledCount} cancelled` : ''}
                 </span>
               </div>
             </div>
-            <span className="text-xl font-black text-[#107E3E] tabular-nums">
+            <span className="text-3xl font-black text-[#107E3E] tabular-nums">
               {totalProcessedToday}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Overview Stat strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-[#D1DBE5] shadow-xs flex items-center justify-between">
+      {/* Spacious 3D KPI Stat Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="surface-3d surface-3d-hover p-5 rounded-2xl flex items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] font-bold text-[#5B738B] uppercase tracking-wide">
+            <span className="text-xs font-extrabold text-[#5B738B] uppercase tracking-wide">
               Total Vehicles Inward
             </span>
-            <p className="text-2xl font-black text-[#1C2833] tabular-nums mt-0.5">{dayTickets.length}</p>
+            <p className="text-3xl sm:text-4xl font-black text-[#1C2833] tabular-nums mt-1">{dayTickets.length}</p>
           </div>
-          <div className="p-2.5 bg-[#354A5F] text-[#F0AB00] rounded-lg shadow-xs">
-            <Truck className="w-5 h-5" />
+          <div className="p-3.5 bg-gradient-to-b from-[#435C75] to-[#293B4D] text-[#F0AB00] rounded-xl border border-[#223242] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_4px_0_#1A2632]">
+            <Truck className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-xl border border-[#F9C99B] shadow-xs flex items-center justify-between">
+        <div className="surface-3d surface-3d-hover p-5 rounded-2xl !border-[#F5BA83] flex items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] font-bold text-[#A64B00] uppercase tracking-wide">
+            <span className="text-xs font-extrabold text-[#A64B00] uppercase tracking-wide">
               Under Loading
             </span>
-            <p className="text-2xl font-black text-[#E9730C] tabular-nums mt-0.5">
+            <p className="text-3xl sm:text-4xl font-black text-[#E9730C] tabular-nums mt-1">
               {underLoadingCount}
             </p>
           </div>
-          <div className="p-2.5 bg-[#FEF7F1] text-[#E9730C] border border-[#F9C99B] rounded-lg">
-            <Clock className="w-5 h-5" />
+          <div className="p-3.5 bg-gradient-to-b from-[#FF9933] to-[#D96300] text-white rounded-xl border border-[#C05400] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_#9E4300]">
+            <Clock className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-3.5 rounded-xl border border-[#B8DCFF] shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#0854A0] uppercase tracking-wide">
-              Called to Gate (Next)
+        <button
+          type="button"
+          onClick={() => setShowCancelledModal(true)}
+          className="surface-3d surface-3d-hover p-5 rounded-2xl !border-[#F5A8A8] flex items-center justify-between gap-3 text-left w-full cursor-pointer"
+          title="View cancelled trucks details"
+        >
+          <div className="min-w-0">
+            <span className="text-xs font-extrabold text-[#9E1C1C] uppercase tracking-wide block">
+              Cancelled Trucks
             </span>
-            <p className="text-2xl font-black text-[#0A6ED1] tabular-nums mt-0.5">
-              {calledCount}
+            <p className="text-3xl sm:text-4xl font-black text-[#CC1F1F] tabular-nums mt-1">
+              {cancelledCount}
             </p>
-          </div>
-          <div className="p-2.5 bg-[#EBF5FF] text-[#0A6ED1] border border-[#B8DCFF] rounded-lg">
-            <Megaphone className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-xl border border-[#ABE2C2] shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-[11px] font-bold text-[#0D6B34] uppercase tracking-wide">
-              Completed & Dispatched
+            <span className="text-[11px] font-semibold text-[#9E1C1C]/80 mt-0.5 block">
+              {cancelledCount > 0 ? 'Click to view list →' : 'No cancellations'}
             </span>
-            <p className="text-2xl font-black text-[#107E3E] tabular-nums mt-0.5">
+          </div>
+          <div className="p-3.5 bg-gradient-to-b from-[#EF4444] to-[#B91C1C] text-white rounded-xl border border-[#991B1B] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_#7F1D1D] shrink-0">
+            <XCircle className="w-6 h-6" />
+          </div>
+        </button>
+
+        <div className="surface-3d surface-3d-hover p-5 rounded-2xl !border-[#8CD9AB] flex items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-extrabold text-[#0D6B34] uppercase tracking-wide">
+              Completed &amp; Dispatched
+            </span>
+            <p className="text-3xl sm:text-4xl font-black text-[#107E3E] tabular-nums mt-1">
               {totalProcessedToday}
             </p>
           </div>
-          <div className="p-2.5 bg-[#F1FDF6] text-[#107E3E] border border-[#ABE2C2] rounded-lg">
-            <CheckCircle2 className="w-5 h-5" />
+          <div className="p-3.5 bg-gradient-to-b from-[#169A4D] to-[#0D6B34] text-white rounded-xl border border-[#0A572A] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_#084521]">
+            <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      {/* Gate Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* Spacious 3D Gate Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {settings.gates.map((gateName, gateIndex) => {
           const normGate = gateName.trim().toUpperCase();
           const gateTickets = dayTickets.filter((t) => (t.gateNumber || '').trim().toUpperCase() === normGate);
@@ -309,78 +324,78 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
           return (
             <div
               key={gateName}
-              className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden flex flex-col justify-between"
+              className="surface-3d surface-3d-hover rounded-2xl overflow-hidden flex flex-col justify-between"
             >
-              {/* Gate Header */}
-              <div className={`bg-gradient-to-r ${gateHeaderGradient} text-white p-3.5 flex items-center justify-between border-b border-[#223242]`}>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-white/15 rounded-lg border border-white/15">
+              {/* 3D Metallic Gate Header */}
+              <div className={`bg-gradient-to-b ${gateHeaderGradient} text-white p-4 flex items-center justify-between border-b-2 border-[#1A2633] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]`}>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-white/15 rounded-xl border border-white/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_2px_0_rgba(0,0,0,0.28)]">
                     <DoorOpen className="w-5 h-5 text-[#F0AB00]" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-base tracking-wide">{gateName}</h3>
-                    <p className="text-[11px] text-[#DCE7F2]">
+                    <h3 className="font-black text-lg tracking-wide leading-tight">{gateName}</h3>
+                    <p className="text-xs text-[#DCE7F2]">
                       {currentLoading ? 'Active (Loading)' : 'Empty (Available)'}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] uppercase font-bold text-[#B8CAE0] block">Today Done</span>
-                  <span className="text-sm font-extrabold text-[#7EE2A8] tabular-nums">{completedCount} Dispatched</span>
+                  <span className="text-sm font-black text-[#7EE2A8] tabular-nums">{completedCount} Dispatched</span>
                 </div>
               </div>
 
               {/* Body */}
-              <div className="p-3.5 space-y-3 flex-1 flex flex-col justify-between">
+              <div className="p-4 space-y-4 flex-1 flex flex-col justify-between">
                 {/* 1. CURRENT UNDER LOADING TRUCK */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-black uppercase text-[#C25900] tracking-wider flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-[#E9730C]" />
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase text-[#C25900] tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-[#E9730C]" />
                       Under Loading
                     </span>
                     {currentLoading && (
-                      <span className="text-[10px] font-semibold text-[#5B738B]">
+                      <span className="text-[11px] font-semibold text-[#5B738B] tabular-nums">
                         Started: {currentLoading.timeLoadingStarted || currentLoading.timeIn}
                       </span>
                     )}
                   </div>
 
                   {currentLoading ? (
-                    <div className="bg-[#FEF7F1] border border-[#F9C99B] rounded-lg p-3 shadow-xs">
-                      <div className="flex justify-between items-start mb-1">
+                    <div className="bg-gradient-to-b from-[#FFF9F3] to-[#FEF2E6] border border-[#F3B780] rounded-xl p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_3px_0_#E5AA74,0_6px_14px_-4px_rgba(233,115,12,0.16)]">
+                      <div className="flex justify-between items-start mb-1.5 gap-2">
                         <div>
-                          <p className="text-base font-black text-[#1C2833] tracking-wide">
+                          <p className="text-lg font-black text-[#1C2833] tracking-wide">
                             {currentLoading.truckNumber}
                           </p>
                           <p className="text-xs font-semibold text-[#354A5F]">
                             {currentLoading.driverName} ({formatSaudiPhoneNumber(currentLoading.driverPhone)})
                           </p>
                         </div>
-                        <span className="text-[10px] font-black bg-[#F0AB00]/25 text-[#7A3800] border border-[#F0AB00]/50 px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-black bg-[#F0AB00]/25 text-[#7A3800] border border-[#F0AB00]/55 px-2 py-0.5 rounded-md tabular-nums shrink-0">
                           {currentLoading.ticketNumber}
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-[#475E75] mb-2.5">
+                      <div className="text-xs text-[#475E75] mb-3">
                         <span className="font-semibold text-[#1C2833]">Destination:</span> {currentLoading.destinationPlace || 'N/A'}
                         {currentLoading.loadingSlip ? (
-                          <span className="ml-2 text-[#107E3E] font-bold block mt-0.5">
+                          <span className="text-[#107E3E] font-bold block mt-1">
                             ✓ Slip Prepared ({currentLoading.loadingSlip.totalQty} Qty | {currentLoading.loadingSlip.totalPallets} Pallets | {formatAfterPalletsSummary(currentLoading.loadingSlip)})
                           </span>
                         ) : (
-                          <span className="ml-2 text-[#BB0000] font-semibold block mt-0.5">! Slip pending</span>
+                          <span className="text-[#BB0000] font-semibold block mt-1">! Slip pending</span>
                         )}
                       </div>
 
                       {/* Action buttons */}
                       {(canUpdate || canPrint) && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#F9C99B]">
+                        <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-[#F3B780]/70">
                           {canUpdate && (
                             <button
                               type="button"
                               onClick={() => onOpenLoadingSlip(currentLoading)}
-                              className="app-btn-sm w-full bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4] shadow-xs"
+                              className="app-btn-sm w-full bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]"
                             >
                               <FileText className="w-3.5 h-3.5 text-[#0A6ED1] shrink-0" />
                               <span>Edit / Print Slip</span>
@@ -390,7 +405,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                             <button
                               type="button"
                               onClick={() => onCompleteLoading(currentLoading)}
-                              className="app-btn-sm w-full bg-[#107E3E] hover:bg-[#0D6B34] text-white shadow-xs"
+                              className="app-btn-sm w-full bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#0A572A]"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                               <span>Complete</span>
@@ -400,41 +415,41 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                       )}
                     </div>
                   ) : (
-                    <div className="bg-[#F7F9FB] border border-dashed border-[#BCC8D4] rounded-lg p-3 text-center text-xs text-[#5B738B]">
+                    <div className="inset-3d bg-[#F2F6FA] border border-dashed border-[#BDCAD7] rounded-xl p-4 text-center text-xs font-medium text-[#5B738B]">
                       No vehicle currently under loading at this gate.
                     </div>
                   )}
                 </div>
 
-                {/* 2. CALLED TO GATE (AGLA NUMBER) */}
+                {/* 2. CALLED TO GATE (NEXT IN QUEUE) */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-black uppercase text-[#0A6ED1] tracking-wider flex items-center gap-1">
-                      <Megaphone className="w-3.5 h-3.5" />
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black uppercase text-[#0A6ED1] tracking-wider flex items-center gap-1.5">
+                      <Megaphone className="w-4 h-4" />
                       Next In Queue (Called)
                     </span>
                   </div>
 
                   {calledTruck ? (
-                    <div className="bg-[#EBF5FF] border border-[#B8DCFF] rounded-lg p-2.5">
-                      <div className="flex justify-between items-start mb-1">
+                    <div className="bg-gradient-to-b from-[#F4F9FF] to-[#E5F1FF] border border-[#96C7FA] rounded-xl p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_3px_0_#88B9EC]">
+                      <div className="flex justify-between items-start mb-1.5 gap-2">
                         <div>
-                          <p className="text-sm font-extrabold text-[#1C2833]">{calledTruck.truckNumber}</p>
-                          <p className="text-[11px] text-[#354A5F]">
+                          <p className="text-base font-black text-[#1C2833]">{calledTruck.truckNumber}</p>
+                          <p className="text-xs text-[#354A5F] font-medium">
                             {calledTruck.driverName} ({formatSaudiPhoneNumber(calledTruck.driverPhone)})
                           </p>
                         </div>
-                        <span className="text-[10px] font-bold bg-[#0A6ED1] text-white px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-extrabold bg-[#0A6ED1] text-white px-2 py-0.5 rounded-md shadow-[0_2px_0_#064B8F]">
                           At Gate
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 mt-2">
+                      <div className="flex items-center gap-2 mt-2.5">
                         {canUpdate && (
                           <button
                             type="button"
                             onClick={() => onStartLoading(calledTruck)}
-                            className="app-btn-sm flex-1 bg-[#0A6ED1] hover:bg-[#085CAF] text-white shadow-xs"
+                            className="app-btn-sm flex-1 bg-[#0A6ED1] hover:bg-[#085CAF] text-white border border-[#064B8F]"
                           >
                             <Play className="w-3.5 h-3.5 shrink-0" />
                             <span>Start Loading</span>
@@ -443,7 +458,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => onOpenWhatsApp(calledTruck, 'gate_call')}
-                          className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white shadow-xs"
+                          className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#0A572A]"
                           title="WhatsApp Reminder"
                         >
                           <MessageSquare className="w-3.5 h-3.5 shrink-0" />
@@ -452,7 +467,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-[#F7F9FB] border border-[#E3EAF2] rounded-lg p-2 text-center text-[11px] text-[#7A8FA3]">
+                    <div className="inset-3d bg-[#F2F6FA] border border-[#DCE5EE] rounded-xl p-3 text-center text-xs text-[#7A8FA3]">
                       No vehicle called to this gate
                     </div>
                   )}
@@ -460,30 +475,30 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
 
                 {/* 3. WAITING QUEUE */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-bold uppercase text-[#5B738B]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-extrabold uppercase text-[#5B738B]">
                       Waiting Queue ({waitingTrucks.length} Trucks)
                     </span>
                   </div>
 
                   {waitingTrucks.length > 0 ? (
-                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                       {waitingTrucks.map((truck, idx) => (
                         <div
                           key={truck.id}
-                          className="bg-[#F7F9FB] hover:bg-[#EFF4F9] border border-[#D1DBE5] rounded-lg p-2 flex items-center justify-between text-xs transition"
+                          className="bg-gradient-to-b from-white to-[#F3F7FB] hover:from-[#F7FAFF] hover:to-[#EBF3FC] border border-[#CBD8E6] rounded-xl p-2.5 flex items-center justify-between text-xs transition shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_0_#C2D0DF]"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-[#354A5F] text-white font-black text-[10px] flex items-center justify-center tabular-nums">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-6 h-6 rounded-full bg-gradient-to-b from-[#455E77] to-[#28394A] text-white font-black text-[11px] flex items-center justify-center tabular-nums shrink-0 shadow-[0_2px_0_#192531]">
                               #{idx + 1}
                             </span>
-                            <div>
-                              <p className="font-extrabold text-[#1C2833] text-[11px]">{truck.truckNumber}</p>
-                              <p className="text-[10px] text-[#5B738B] truncate max-w-[100px]">{truck.driverName}</p>
+                            <div className="min-w-0">
+                              <p className="font-black text-[#1C2833] text-xs">{truck.truckNumber}</p>
+                              <p className="text-[11px] text-[#5B738B] truncate max-w-[110px]">{truck.driverName}</p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               type="button"
                               onClick={() => onOpenWhatsApp(truck, 'gate_call')}
@@ -496,7 +511,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onCallTruck(truck)}
-                                className="app-btn-sm bg-[#0A6ED1] hover:bg-[#085CAF] text-white shadow-xs"
+                                className="app-btn-sm bg-[#0A6ED1] hover:bg-[#085CAF] text-white border border-[#064B8F]"
                               >
                                 <span>Call</span>
                                 <ArrowRight className="w-3 h-3 shrink-0" />
@@ -507,7 +522,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-[#7A8FA3] italic text-center py-1">Queue is empty</p>
+                    <p className="text-xs text-[#7A8FA3] italic text-center py-1.5">Queue is empty</p>
                   )}
                 </div>
               </div>
@@ -515,6 +530,109 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
           );
         })}
       </div>
+
+      {/* Cancelled Trucks Detail Modal */}
+      {showCancelledModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="surface-3d bg-white rounded-2xl w-full max-w-2xl overflow-hidden border border-[#E5B8B8]">
+            <div className="bg-gradient-to-b from-[#991B1B] to-[#7F1D1D] text-white px-5 py-4 flex items-center justify-between border-b border-[#5C1212]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/15 rounded-xl border border-white/25">
+                  <XCircle className="w-5 h-5 text-red-100" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-wide">
+                    Cancelled Trucks ({cancelledCount})
+                  </h3>
+                  <p className="text-xs text-red-100/90">
+                    Vehicles marked as Cancelled on {date}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelledModal(false)}
+                className="p-1.5 rounded-lg text-red-100 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                aria-label="Close cancelled trucks list"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 max-h-[65vh] overflow-y-auto space-y-2.5 bg-[#F8FAFC]">
+              {cancelledTickets.length === 0 ? (
+                <div className="inset-3d bg-white border border-dashed border-[#CBD8E6] rounded-xl p-8 text-center">
+                  <XCircle className="w-8 h-8 text-[#9DB0C3] mx-auto mb-2" />
+                  <p className="text-sm font-bold text-[#354A5F]">No Cancelled Trucks</p>
+                  <p className="text-xs text-[#5B738B] mt-0.5">
+                    0 trucks have been cancelled for {date}.
+                  </p>
+                </div>
+              ) : (
+                cancelledTickets.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    className="bg-white border border-[#F2C6C6] rounded-xl p-3.5 shadow-[0_2px_0_#E8D0D0] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-md bg-red-100 text-[#9E1C1C] font-black text-[11px] tabular-nums">
+                          #{idx + 1}
+                        </span>
+                        <span className="text-base font-black text-[#1C2833] tracking-wide">
+                          {t.truckNumber}
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#EFF4F9] text-[#354A5F] border border-[#CBD8E6]">
+                          {t.ticketNumber}
+                        </span>
+                        {t.delNoteNumber && (
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                            Del: {t.delNoteNumber}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#475E75] flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span>
+                          <strong className="text-[#1C2833]">Driver:</strong> {t.driverName || '—'} ({formatSaudiPhoneNumber(t.driverPhone) || '—'})
+                        </span>
+                        <span>
+                          <strong className="text-[#1C2833]">Gate:</strong> {t.gateNumber}
+                        </span>
+                        <span>
+                          <strong className="text-[#1C2833]">Place:</strong> {t.destinationPlace || '—'}
+                        </span>
+                      </div>
+                      {t.remarks && (
+                        <p className="text-[11px] text-[#9E1C1C] font-medium">
+                          Remarks: {t.remarks}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FFF0F0] text-[#BB0000] border border-[#F4B8B8]">
+                        Cancelled
+                      </span>
+                      <p className="text-[11px] text-[#5B738B] mt-1 tabular-nums">
+                        In: {t.timeIn || '—'}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-5 py-3 bg-white border-t border-[#DCE5EE] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCancelledModal(false)}
+                className="app-btn bg-[#354A5F] hover:bg-[#243647] text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

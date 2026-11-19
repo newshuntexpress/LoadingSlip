@@ -97,28 +97,28 @@ export const LiveStatusQrCard: React.FC<LiveStatusQrCardProps> = ({
     <>
       <section
         aria-label="Gate Guard Scan QR Pass"
-        className="bg-white rounded-2xl border border-[#D1DBE5] p-4 sm:p-5 shadow-xs space-y-3.5"
+        className="surface-3d rounded-2xl p-5 sm:p-6 space-y-4"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-[#E5ECF4] pb-3">
+        <div className="flex items-start justify-between gap-3 border-b border-[#E5ECF4] pb-3.5">
           <div className="min-w-0">
-            <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide text-[#1C2833] flex items-center gap-2">
-              <QrCode className="w-4 h-4 text-[#0A6ED1] shrink-0" />
+            <h3 className="text-sm sm:text-base font-black uppercase tracking-wide text-[#1C2833] flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-[#0A6ED1] shrink-0" />
               <span>Gate Guard QR Pass</span>
             </h3>
-            <p className="text-xs text-[#475E75] mt-1 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#475E75] mt-1 leading-relaxed">
               Show this QR code to the Gate Guard to scan and verify your live loading status directly on their device.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          {/* High-Contrast Scannable QR Container */}
+        <div className="flex flex-col sm:flex-row items-center gap-5">
+          {/* High-Contrast Scannable QR Container (flat #FFFFFF inside for clean camera decode) */}
           <button
             type="button"
             onClick={() => qrDataUrl && setEnlarged(true)}
             disabled={!qrDataUrl}
             aria-label="Enlarge QR code for gate guard scanning"
-            className="w-44 h-44 sm:w-40 sm:h-40 rounded-xl bg-white border-2 border-[#354A5F] p-2 flex items-center justify-center shrink-0 shadow-xs hover:border-[#0A6ED1] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer transition disabled:cursor-default"
+            className="w-44 h-44 sm:w-44 sm:h-44 rounded-2xl bg-[#FFFFFF] border-2 border-[#354A5F] p-2.5 flex items-center justify-center shrink-0 shadow-[0_4px_0_#C5D3E2,0_10px_20px_-6px_rgba(24,42,64,0.2)] hover:border-[#0A6ED1] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer transition disabled:cursor-default"
           >
             {qrError ? (
               <div className="text-center px-2 space-y-1">
@@ -137,32 +137,32 @@ export const LiveStatusQrCard: React.FC<LiveStatusQrCardProps> = ({
           </button>
 
           {/* Pass Summary & Actions */}
-          <div className="flex-1 w-full min-w-0 space-y-3">
-            <div className="bg-[#F7F9FB] rounded-xl border border-[#E3EAF2] p-3 space-y-1.5">
-              <div className="flex items-center justify-between gap-2 text-xs">
+          <div className="flex-1 w-full min-w-0 space-y-3.5">
+            <div className="bg-[#F4F7FB] rounded-xl border border-[#C8D6E5] p-3.5 space-y-2 inset-3d">
+              <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
                 <span className="font-semibold text-[#5B738B]">Truck Number</span>
                 <span className="font-black text-[#1C2833] tabular-nums">{truckNumber || '—'}</span>
               </div>
               {gateNumber && (
-                <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
                   <span className="font-semibold text-[#5B738B]">Assigned Gate</span>
                   <span className="font-black text-[#0854A0]">{gateNumber}</span>
                 </div>
               )}
               {delNoteNumber && (
-                <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
                   <span className="font-semibold text-[#5B738B]">Delivery No.</span>
                   <span className="font-bold text-[#1C2833] font-mono tabular-nums">{delNoteNumber}</span>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setEnlarged(true)}
                 disabled={!qrDataUrl}
-                className="min-h-[44px] px-3.5 rounded-xl bg-[#0A6ED1] hover:bg-[#085CAF] disabled:opacity-50 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer transition whitespace-nowrap"
+                className="btn-3d min-h-[46px] px-4 rounded-xl bg-gradient-to-b from-[#0C78E2] to-[#085CAF] hover:from-[#0E82F2] hover:to-[#0A6ED1] disabled:opacity-50 text-white text-sm font-extrabold inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
               >
                 <Maximize2 className="w-4 h-4 shrink-0" />
                 <span>Enlarge for Scan</span>
@@ -172,7 +172,7 @@ export const LiveStatusQrCard: React.FC<LiveStatusQrCardProps> = ({
                 type="button"
                 onClick={handleCopyUrl}
                 disabled={!statusUrl}
-                className="min-h-[44px] px-3.5 rounded-xl bg-[#EFF4F9] hover:bg-[#E1EBF5] disabled:opacity-50 text-[#1C2833] border border-[#BCC8D4] text-xs font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition whitespace-nowrap"
+                className="btn-3d min-h-[46px] px-4 rounded-xl bg-gradient-to-b from-[#FFFFFF] to-[#EFF4F9] hover:to-[#E1EBF5] disabled:opacity-50 text-[#1C2833] border border-[#BCC8D4] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
               >
                 {copied ? (
                   <>
@@ -188,8 +188,8 @@ export const LiveStatusQrCard: React.FC<LiveStatusQrCardProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] text-[#5B738B]">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#107E3E] shrink-0" />
+            <div className="flex items-center gap-1.5 text-xs text-[#5B738B]">
+              <ShieldCheck className="w-4 h-4 text-[#107E3E] shrink-0" />
               <span className="truncate font-mono" title={statusUrl}>
                 {statusUrl}
               </span>

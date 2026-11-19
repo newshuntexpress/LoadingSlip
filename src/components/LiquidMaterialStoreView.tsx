@@ -222,10 +222,16 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
 
   const isDark = store?.settings.theme === 'dark';
 
-  // Semantic scoped surface classes (single-level elevation)
-  const shellBg = isDark ? 'bg-slate-950 text-slate-100 border-slate-800' : 'bg-[#F7F9FB] text-[#1C2833] border-[#D1DBE5]';
-  const cardCls = isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-[#D1DBE5] text-[#1C2833]';
-  const altBoxCls = isDark ? 'bg-slate-800/70 border-slate-700 text-slate-100' : 'bg-[#EFF4F9] border-[#D1DBE5] text-[#1C2833]';
+  // Semantic scoped 3D surface classes
+  const shellBg = isDark
+    ? 'bg-slate-950 text-slate-100 border-slate-800 shadow-[0_14px_34px_-10px_rgba(2,6,23,0.7)]'
+    : 'bg-gradient-to-b from-[#F9FBFE] to-[#EEF3FA] text-[#1C2833] border-[#C5D3E2] shadow-[0_6px_0_#C5D3E2,0_18px_36px_-10px_rgba(24,42,64,0.16)]';
+  const cardCls = isDark
+    ? 'bg-gradient-to-b from-slate-900 to-slate-950 border-slate-700/80 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_0_#0F172A,0_12px_24px_-6px_rgba(0,0,0,0.45)]'
+    : 'surface-3d text-[#1C2833]';
+  const altBoxCls = isDark
+    ? 'bg-slate-800/75 border-slate-700 text-slate-100 shadow-[inset_0_2px_5px_rgba(0,0,0,0.35)]'
+    : 'bg-[#EFF4F9] border-[#C8D6E5] text-[#1C2833] inset-3d';
   const mutedCls = isDark ? 'text-slate-400' : 'text-[#5B738B]';
   const inputCls = isDark
     ? 'bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500 focus:ring-[#0A6ED1]'

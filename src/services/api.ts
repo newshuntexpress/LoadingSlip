@@ -245,6 +245,7 @@ export const ApiClient = {
     roleName: UserRoleName;
     isActive: boolean;
     permissions?: string[];
+    signatureDataUrl?: string;
   }): Promise<{ user: AuthUser }> {
     return request('/api/admin/users', {
       method: 'POST',
@@ -254,11 +255,30 @@ export const ApiClient = {
 
   async updateUser(
     userId: string,
-    payload: { fullName?: string; email?: string; roleName?: UserRoleName; isActive?: boolean }
+    payload: {
+      fullName?: string;
+      email?: string;
+      roleName?: UserRoleName;
+      isActive?: boolean;
+      signatureDataUrl?: string;
+    }
   ): Promise<{ user: AuthUser }> {
     return request(`/api/admin/users/${encodeURIComponent(userId)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+  },
+
+  async uploadUserSignature(userId: string, signatureDataUrl: string): Promise<{ user: AuthUser }> {
+    return request(`/api/admin/users/${encodeURIComponent(userId)}/signature`, {
+      method: 'PUT',
+      body: JSON.stringify({ signatureDataUrl }),
+    });
+  },
+
+  async deleteUserSignature(userId: string): Promise<{ user: AuthUser }> {
+    return request(`/api/admin/users/${encodeURIComponent(userId)}/signature`, {
+      method: 'DELETE',
     });
   },
 

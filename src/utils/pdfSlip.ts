@@ -74,7 +74,8 @@ function drawSingleSlipCopy(
   settings: CompanySettings,
   copyType: 'Original (Office Use)' | 'Duplicate (For Forklift Operator)',
   yStart: number,
-  storeInchargeFullName?: string
+  storeInchargeFullName?: string,
+  storeInchargeSignatureDataUrl?: string
 ) {
   const slip = ticket.loadingSlip;
   const items = slip?.items || [];
@@ -118,7 +119,7 @@ function drawSingleSlipCopy(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(65, 65, 65);
-  const infoLine = `${settings.address} | Ph: ${settings.phone} | GSTIN: ${settings.gstin}`;
+  const infoLine = [settings.address, settings.phone ? `Ph: ${settings.phone}` : ''].filter(Boolean).join(' | ');
   doc.text(truncateText(doc, infoLine, maxTextW + 2), textX, headerY + 7.8);
 
   // Right header badge + title
@@ -469,6 +470,14 @@ function drawSingleSlipCopy(
   doc.setTextColor(31, 41, 55);
   doc.text('Store Incharge Signature', box2X + boxW / 2, boxY + 4, { align: 'center' });
 
+  const signatureToDraw =
+    storeInchargeSignatureDataUrl !== undefined
+      ? storeInchargeSignatureDataUrl
+      : slip?.storeInchargeSignatureDataUrl || settings.storeInchargeSignatureDataUrl || '';
+  if (signatureToDraw) {
+    drawPdfLogo(doc, signatureToDraw, box2X + 8, boxY + 4.8, boxW - 16, 7.2);
+  }
+
   doc.setDrawColor(156, 163, 175);
   doc.setLineWidth(0.25);
   drawDashedLine(doc, box2X + 3, boxY + 12.5, box2X + boxW - 3, boxY + 12.5, 1.5, 1.2);
@@ -490,7 +499,8 @@ function drawSingleSlipCopy(
 export function generateLoadingSlipPDF(
   ticket: TicketRecord,
   settings: CompanySettings,
-  storeInchargeFullName?: string
+  storeInchargeFullName?: string,
+  storeInchargeSignatureDataUrl?: string
 ): void {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -499,7 +509,15 @@ export function generateLoadingSlipPDF(
   });
 
   // Copy 1: Original (Top half, shifted 12mm down from top edge)
-  drawSingleSlipCopy(doc, ticket, settings, 'Original (Office Use)', 12, storeInchargeFullName);
+  drawSingleSlipCopy(
+    doc,
+    ticket,
+    settings,
+    'Original (Office Use)',
+    12,
+    storeInchargeFullName,
+    storeInchargeSignatureDataUrl
+  );
 
   // Middle Scissor Cut Line
   const cutY = 149.5;
@@ -518,7 +536,15 @@ export function generateLoadingSlipPDF(
   doc.text('A4 Dual Copy Sheet', 203, cutY + 1, { align: 'right' });
 
   // Copy 2: Duplicate (Bottom half)
-  drawSingleSlipCopy(doc, ticket, settings, 'Duplicate (For Forklift Operator)', 155, storeInchargeFullName);
+  drawSingleSlipCopy(
+    doc,
+    ticket,
+    settings,
+    'Duplicate (For Forklift Operator)',
+    155,
+    storeInchargeFullName,
+    storeInchargeSignatureDataUrl
+  );
 
   const fileIdentifier = (ticket.loadingSlip?.delNoteNumber || ticket.delNoteNumber || ticket.ticketNumber).replace(
     /[^a-zA-Z0-9_-]/g,

@@ -19,21 +19,36 @@ export const PACK_DROPDOWN_OPTIONS = [
 interface LoadingSlipModalProps {
   ticket: TicketRecord;
   settings: CompanySettings;
+  currentUserId?: string;
   storeInchargeFullName?: string;
+  storeInchargeSignatureDataUrl?: string;
   onSave: (updatedTicket: TicketRecord, openPrintDirectly?: boolean) => void;
   onClose: () => void;
 }
 
 export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   ticket,
-  settings: _settings,
+  settings,
+  currentUserId,
   storeInchargeFullName,
+  storeInchargeSignatureDataUrl,
   onSave,
   onClose,
 }) => {
   const existingSlip = ticket.loadingSlip;
   const isSlipLocked = Boolean(existingSlip?.isLocked);
-  const displayStoreInchargeName = (storeInchargeFullName || existingSlip?.storeInchargeName || '').trim();
+  const isOtherPreparerLocked = Boolean(
+    isSlipLocked &&
+      existingSlip?.storeInchargeUserId &&
+      currentUserId &&
+      existingSlip.storeInchargeUserId !== currentUserId
+  );
+  const displayStoreInchargeName = isOtherPreparerLocked
+    ? (existingSlip?.storeInchargeName || storeInchargeFullName || '').trim()
+    : (storeInchargeFullName || existingSlip?.storeInchargeName || '').trim();
+  const displaySignatureDataUrl = isOtherPreparerLocked
+    ? existingSlip?.storeInchargeSignatureDataUrl || settings.storeInchargeSignatureDataUrl || ''
+    : storeInchargeSignatureDataUrl || settings.storeInchargeSignatureDataUrl || '';
 
   const [delNoteNumber, setDelNoteNumber] = useState<string>(
     existingSlip?.delNoteNumber || ticket.delNoteNumber || 'A1DD00001'
@@ -234,7 +249,9 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       totalLooseRolls,
       preparedBy: preparedBy.trim().toUpperCase(),
       checkedBy: checkedBy.trim().toUpperCase(),
+      storeInchargeUserId: currentUserId,
       storeInchargeName: displayStoreInchargeName,
+      storeInchargeSignatureDataUrl: storeInchargeSignatureDataUrl || '',
       createdAt: existingSlip?.createdAt || new Date().toISOString().split('T')[0],
     };
   };
@@ -691,8 +708,23 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
               <span className="text-xs font-semibold text-neutral-700 block mb-1">
                 Store Incharge Signature
               </span>
-              <div className="w-full px-3 py-1.5 text-xs font-bold text-neutral-900 rounded-lg border border-neutral-300 bg-neutral-100/80 min-h-[30px] flex items-center">
-                {displayStoreInchargeName || '—'}
+              <div className="w-full px-3 py-1.5 rounded-lg border border-neutral-300 bg-white flex flex-col items-center justify-between min-h-[64px]">
+                <div className="h-8 w-full flex items-center justify-center">
+                  {displaySignatureDataUrl ? (
+                    <img
+                      src={displaySignatureDataUrl}
+                      alt="Store Incharge Digital Signature"
+                      className="max-h-8 max-w-[160px] object-contain"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-neutral-400 italic text-center">
+                      No digital signature assigned (Admin upload required)
+                    </span>
+                  )}
+                </div>
+                <div className="w-full border-t border-dashed border-neutral-300 pt-0.5 text-center text-xs font-bold text-neutral-900">
+                  {displayStoreInchargeName || '—'}
+                </div>
               </div>
             </div>
           </div>

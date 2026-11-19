@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AuthUser, UserRoleName, PermissionOption, RoleOption, AuditLogEntry, ActiveSessionInfo } from '../types';
 import { ApiClient } from '../services/api';
+import { processSignatureFile } from '../utils/logo';
 import {
   Shield,
   Users,
@@ -20,6 +21,9 @@ import {
   Eye,
   EyeOff,
   Lock,
+  PenTool,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 
 interface AdminDashboardModalProps {
@@ -81,6 +85,7 @@ const DEFAULT_EX_FACTORY_PERMS = ['ex_factory.view', 'ex_factory.create', 'ex_fa
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   currentUser,
   onClose,
+  onCurrentUserUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit'>('users');
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -102,6 +107,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [newRoleName, setNewRoleName] = useState<UserRoleName>('user');
   const [newIsActive, setNewIsActive] = useState(true);
   const [newPerms, setNewPerms] = useState<string[]>(DEFAULT_USER_PERMS);
+  const [newSignatureDataUrl, setNewSignatureDataUrl] = useState('');
+  const [newSigProcessing, setNewSigProcessing] = useState(false);
+  const newSigInputRef = useRef<HTMLInputElement>(null);
   const [showNewPass, setShowNewPass] = useState(false);
 
   // Edit User Drawer/Modal State
@@ -111,6 +119,14 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [editRoleName, setEditRoleName] = useState<UserRoleName>('user');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editPerms, setEditPerms] = useState<string[]>([]);
+  const [editSignatureDataUrl, setEditSignatureDataUrl] = useState('');
+  const [editSigProcessing, setEditSigProcessing] = useState(false);
+  const editSigInputRef = useRef<HTMLInputElement>(null);
+
+  // Quick Row Signature Upload State (Admin only)
+  const [rowSigLoadingId, setRowSigLoadingId] = useState<string | null>(null);
+  const [rowSigTargetUser, setRowSigTargetUser] = useState<AuthUser | null>(null);
+  const rowSigInputRef = useRef<HTMLInputElement>(null);
 
   // Reset Password State
   const [resetTarget, setResetTarget] = useState<AuthUser | null>(null);
@@ -178,6 +194,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
         roleName: newRoleName,
         isActive: newIsActive,
         permissions: newRoleName !== 'admin' ? newPerms : undefined,
+        signatureDataUrl: newSignatureDataUrl || '',
       });
       setSuccessMsg(
         `User "${res.user.username}" created as ${res.user.roleDisplayName}. They must change their temporary password on first login.`
@@ -190,9 +207,84 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       setNewRoleName('user');
       setNewIsActive(true);
       setNewPerms(DEFAULT_USER_PERMS);
+      setNewSignatureDataUrl('');
       await loadAll();
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to create user.');
+    }
+  };
+
+  const handleNewUserSignatureSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setNewSigProcessing(true);
+    setErrorMsg(null);
+    try {
+      const png = await processSignatureFile(file);
+      setNewSignatureDataUrl(png);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Unable to process signature image.');
+    } finally {
+      setNewSigProcessing(false);
+    }
+  };
+
+  const handleEditUserSignatureSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setEditSigProcessing(true);
+    setErrorMsg(null);
+    try {
+      const png = await processSignatureFile(file);
+      setEditSignatureDataUrl(png);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Unable to process signature image.');
+    } finally {
+      setEditSigProcessing(false);
+    }
+  };
+
+  const handleQuickRowSignatureSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const target = rowSigTargetUser;
+    setRowSigTargetUser(null);
+    if (!file || !target) return;
+    setRowSigLoadingId(target.id);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const png = await processSignatureFile(file);
+      const res = await ApiClient.uploadUserSignature(target.id, png);
+      if (res.user.id === currentUser.id) {
+        onCurrentUserUpdated?.(res.user);
+      }
+      setSuccessMsg(`Digital signature ${target.signatureDataUrl ? 'updated' : 'uploaded'} for "@${target.username}".`);
+      await loadAll();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to upload digital signature.');
+    } finally {
+      setRowSigLoadingId(null);
+    }
+  };
+
+  const handleQuickRowSignatureDelete = async (u: AuthUser) => {
+    setRowSigLoadingId(u.id);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const res = await ApiClient.deleteUserSignature(u.id);
+      if (res.user.id === currentUser.id) {
+        onCurrentUserUpdated?.(res.user);
+      }
+      setSuccessMsg(`Digital signature deleted for "@${u.username}".`);
+      await loadAll();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Failed to delete digital signature.');
+    } finally {
+      setRowSigLoadingId(null);
     }
   };
 
@@ -215,6 +307,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     );
     setEditIsActive(u.isActive);
     setEditPerms(u.permissions || []);
+    setEditSignatureDataUrl(u.signatureDataUrl || '');
   };
 
   const handleSaveEditUser = async (e: React.FormEvent) => {
@@ -224,15 +317,20 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setSuccessMsg(null);
 
     try {
-      await ApiClient.updateUser(editingUser.id, {
+      const updated = await ApiClient.updateUser(editingUser.id, {
         fullName: editFullName.trim(),
         email: editEmail.trim(),
         roleName: editRoleName,
         isActive: editIsActive,
+        signatureDataUrl: editSignatureDataUrl,
       });
 
       if (editRoleName !== 'admin') {
         await ApiClient.updateUserPermissions(editingUser.id, editPerms);
+      }
+
+      if (updated.user && updated.user.id === currentUser.id) {
+        onCurrentUserUpdated?.(updated.user);
       }
 
       setSuccessMsg(`Updated user "${editingUser.username}" successfully.`);
@@ -693,6 +791,58 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   )}
 
+                  {/* Per-User Digital Signature Upload (Create User - Admin Only) */}
+                  <div className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-neutral-800 flex items-center gap-1.5">
+                        <PenTool className="w-3.5 h-3.5 text-blue-700" />
+                        <span>User Digital Signature (Optional — Admin Only)</span>
+                      </span>
+                      <span className="text-[10px] text-neutral-500">PNG, JPG, WebP, SVG</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex-1 h-14 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 flex items-center justify-center px-3">
+                        {newSignatureDataUrl ? (
+                          <img
+                            src={newSignatureDataUrl}
+                            alt="New User Digital Signature"
+                            className="max-h-11 max-w-[180px] object-contain"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-neutral-400 italic">No signature selected</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          ref={newSigInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                          onChange={handleNewUserSignatureSelect}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          disabled={newSigProcessing}
+                          onClick={() => newSigInputRef.current?.click()}
+                          className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white"
+                        >
+                          {newSigProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Upload className="w-3.5 h-3.5 shrink-0" />}
+                          <span>{newSignatureDataUrl ? 'Change' : 'Upload Signature'}</span>
+                        </button>
+                        {newSignatureDataUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setNewSignatureDataUrl('')}
+                            className="app-btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
@@ -711,6 +861,15 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </form>
               )}
 
+              {/* Hidden shared file input for quick per-row Admin signature upload/replace */}
+              <input
+                ref={rowSigInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                onChange={handleQuickRowSignatureSelect}
+                className="hidden"
+              />
+
               {/* Users Table (Desktop / Tablet) */}
               <div className="border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
@@ -720,6 +879,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         <th className="py-3 px-3.5">Username & Full Name</th>
                         <th className="py-3 px-3">Role</th>
                         <th className="py-3 px-3 text-center">Status</th>
+                        <th className="py-3 px-3 text-center">Digital Signature</th>
                         <th className="py-3 px-3">Created</th>
                         <th className="py-3 px-3">Last Login</th>
                         <th className="py-3 px-3 text-center">Sessions</th>
@@ -787,6 +947,52 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 />
                                 {u.isActive ? 'Active' : 'Inactive'}
                               </span>
+                            </td>
+
+                            <td className="py-3 px-3 text-center">
+                              <div className="flex flex-col items-center gap-1.5">
+                                {u.signatureDataUrl ? (
+                                  <div className="h-9 w-24 rounded-lg border border-neutral-200 bg-white flex items-center justify-center p-1 shadow-2xs">
+                                    <img
+                                      src={u.signatureDataUrl}
+                                      alt={`Signature of ${u.fullName}`}
+                                      className="max-h-7 max-w-[88px] object-contain"
+                                    />
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-neutral-400 italic">Not uploaded</span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={rowSigLoadingId === u.id}
+                                    onClick={() => {
+                                      setRowSigTargetUser(u);
+                                      rowSigInputRef.current?.click();
+                                    }}
+                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                    title={u.signatureDataUrl ? 'Change user digital signature' : 'Upload user digital signature'}
+                                  >
+                                    {rowSigLoadingId === u.id ? (
+                                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                    ) : (
+                                      <Upload className="w-2.5 h-2.5" />
+                                    )}
+                                    <span>{u.signatureDataUrl ? 'Edit' : 'Upload'}</span>
+                                  </button>
+                                  {u.signatureDataUrl && (
+                                    <button
+                                      type="button"
+                                      disabled={rowSigLoadingId === u.id}
+                                      onClick={() => handleQuickRowSignatureDelete(u)}
+                                      className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 inline-flex items-center cursor-pointer disabled:opacity-50 transition"
+                                      title="Delete user digital signature"
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </td>
 
                             <td className="py-3 px-3 text-[11px] text-neutral-600">
@@ -1103,6 +1309,58 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           Administrators automatically have full permissions ({permissionsMeta.length || 16} capabilities) across all sections.
                         </div>
                       )}
+
+                      {/* Per-User Digital Signature Management (Edit User - Admin Only) */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-neutral-800 flex items-center gap-1.5">
+                            <PenTool className="w-3.5 h-3.5 text-blue-700" />
+                            <span>Digital Signature for @{editingUser.username} (Admin Only)</span>
+                          </span>
+                          <span className="text-[10px] text-neutral-500">PNG, JPG, WebP, SVG</span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          <div className="flex-1 h-14 rounded-lg border border-neutral-300 bg-white flex items-center justify-center px-3">
+                            {editSignatureDataUrl ? (
+                              <img
+                                src={editSignatureDataUrl}
+                                alt={`Signature of ${editingUser.fullName}`}
+                                className="max-h-11 max-w-[180px] object-contain"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-neutral-400 italic">No signature uploaded</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <input
+                              ref={editSigInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                              onChange={handleEditUserSignatureSelect}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              disabled={editSigProcessing}
+                              onClick={() => editSigInputRef.current?.click()}
+                              className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white"
+                            >
+                              {editSigProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Upload className="w-3.5 h-3.5 shrink-0" />}
+                              <span>{editSignatureDataUrl ? 'Change' : 'Upload'}</span>
+                            </button>
+                            {editSignatureDataUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setEditSignatureDataUrl('')}
+                                className="app-btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                                <span>Delete</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="bg-neutral-50 border-t border-neutral-200 px-5 py-3 flex justify-end gap-2">
@@ -1327,6 +1585,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                   <option value="PASSWORD_CHANGED">PASSWORD_CHANGED</option>
                   <option value="PASSWORD_RESET">PASSWORD_RESET</option>
                   <option value="PERMISSIONS_UPDATED">PERMISSIONS_UPDATED</option>
+                  <option value="USER_SIGNATURE_UPDATED">USER_SIGNATURE_UPDATED</option>
+                  <option value="USER_SIGNATURE_DELETED">USER_SIGNATURE_DELETED</option>
                   <option value="SESSION_REVOKED">SESSION_REVOKED</option>
                   <option value="TICKET_CREATED">TICKET_CREATED</option>
                   <option value="TICKET_UPDATED">TICKET_UPDATED</option>

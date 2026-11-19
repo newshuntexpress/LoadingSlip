@@ -40,6 +40,7 @@ export interface SafeUser {
   updatedAt: number;
   permissions: string[];
   activeSessionCount?: number;
+  signatureDataUrl?: string;
 }
 
 const dataDir = process.env.DB_DIR || path.join(process.cwd(), 'data');
@@ -88,6 +89,7 @@ db.exec(`
     failed_login_attempts INTEGER NOT NULL DEFAULT 0,
     locked_until INTEGER,
     last_login_at INTEGER,
+    signature_data_url TEXT DEFAULT '',
     created_by TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -302,6 +304,14 @@ db.exec(`
   }
 }
 
+{
+  const userCols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+  const userColNames = new Set(userCols.map((c) => c.name));
+  if (!userColNames.has('signature_data_url')) {
+    db.exec(`ALTER TABLE users ADD COLUMN signature_data_url TEXT DEFAULT ''`);
+  }
+}
+
 const SEED_PERMISSIONS: Array<{ id: string; key: string; name: string; category: string }> = [
   { id: 'perm_tickets_view', key: 'tickets.view', name: 'View Tickets & Live Gate Monitor', category: 'Operations' },
   { id: 'perm_tickets_create', key: 'tickets.create', name: 'Create New Gate Tickets', category: 'Operations' },
@@ -432,6 +442,43 @@ function seedDatabase(): void {
     } catch {
       // Ignore malformed JSON
     }
+  }
+
+  // One-time sync: update legacy phone 0550170374 -> 4981604 and promote all current app settings to default
+  const phoneAndDefaultSynced = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'settings_default_sync_4981604'`)
+    .get() as { key: string } | undefined;
+  if (!phoneAndDefaultSynced) {
+    db.transaction(() => {
+      const activeRow = db
+        .prepare(`SELECT value_json, updated_by FROM app_settings WHERE key = 'active'`)
+        .get() as { value_json: string; updated_by: string | null } | undefined;
+      let mergedSettings: Record<string, unknown> = { ...DEFAULT_APP_SETTINGS };
+      if (activeRow) {
+        try {
+          const parsedActive = JSON.parse(activeRow.value_json);
+          if (parsedActive && typeof parsedActive === 'object') {
+            mergedSettings = { ...DEFAULT_APP_SETTINGS, ...parsedActive };
+          }
+        } catch {
+          // Fallback to DEFAULT_APP_SETTINGS
+        }
+      }
+      if (!mergedSettings.phone || String(mergedSettings.phone).trim() === '0550170374') {
+        mergedSettings.phone = '4981604';
+      }
+      const actor = activeRow?.updated_by || 'system';
+      const serialized = JSON.stringify(mergedSettings);
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`
+      ).run(serialized, actor, now);
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default', ?, ?, ?)`
+      ).run(serialized, actor, now);
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('settings_default_sync_4981604', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
   }
 
   // Seed default tickets & drivers once on fresh databases
@@ -644,7 +691,7 @@ export function getSafeUserById(userId: string): SafeUser | null {
   const row = db
     .prepare(
       `SELECT u.id, u.username, u.full_name, u.email, u.role_id, u.is_active,
-              u.must_change_password, u.last_login_at, u.created_by, u.created_at, u.updated_at,
+              u.must_change_password, u.last_login_at, u.signature_data_url, u.created_by, u.created_at, u.updated_at,
               r.name as role_name, r.display_name as role_display_name
        FROM users u
        INNER JOIN roles r ON r.id = u.role_id
@@ -660,6 +707,7 @@ export function getSafeUserById(userId: string): SafeUser | null {
         is_active: number;
         must_change_password: number;
         last_login_at: number | null;
+        signature_data_url: string | null;
         created_by: string | null;
         created_at: number;
         updated_at: number;
@@ -681,6 +729,7 @@ export function getSafeUserById(userId: string): SafeUser | null {
     isActive: row.is_active === 1,
     mustChangePassword: row.must_change_password === 1,
     lastLoginAt: row.last_login_at,
+    signatureDataUrl: row.signature_data_url || '',
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

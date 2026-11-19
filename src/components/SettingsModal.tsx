@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiClient } from '../services/api';
-import { processLogoFile } from '../utils/logo';
+import { processLogoFile, processSignatureFile } from '../utils/logo';
 import {
   Settings,
   Plus,
@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Building2,
   Loader2,
+  PenTool,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -36,6 +37,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [logoDataUrl, setLogoDataUrl] = useState<string>(settings.logoDataUrl || '');
   const [logoProcessing, setLogoProcessing] = useState<boolean>(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [storeInchargeSignatureDataUrl, setStoreInchargeSignatureDataUrl] = useState<string>(
+    settings.storeInchargeSignatureDataUrl || ''
+  );
+  const [signatureProcessing, setSignatureProcessing] = useState<boolean>(false);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
   const [address, setAddress] = useState(settings.address);
   const [phone, setPhone] = useState(settings.phone);
   const [email, setEmail] = useState(settings.email);
@@ -93,6 +99,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     showFeedback('success', 'Logo removed. Click "Save Settings" to apply.');
   };
 
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSignatureProcessing(true);
+    try {
+      const normalizedPng = await processSignatureFile(file);
+      setStoreInchargeSignatureDataUrl(normalizedPng);
+      showFeedback(
+        'success',
+        'Digital signature uploaded! Click "Save Settings" or "Save as Default" to show it on Loading Slips.'
+      );
+    } catch (err: any) {
+      showFeedback('error', err?.message || 'Unable to process selected signature image.');
+    } finally {
+      setSignatureProcessing(false);
+    }
+  };
+
+  const handleRemoveSignature = () => {
+    setStoreInchargeSignatureDataUrl('');
+    showFeedback('success', 'Digital signature removed. Click "Save Settings" to apply.');
+  };
+
   const buildCurrentSettings = (): CompanySettings => {
     const finalGates = [...gates];
     const pendingGate = newGateName.trim();
@@ -103,6 +133,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       companyName: companyName.trim() || 'Factory / Plant Name',
       companySubtitle: companySubtitle.trim(),
       logoDataUrl: logoDataUrl || '',
+      storeInchargeSignatureDataUrl: storeInchargeSignatureDataUrl || '',
       address: address.trim(),
       phone: phone.trim(),
       email: email.trim(),
@@ -133,6 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setCompanyName(def.companyName);
     setCompanySubtitle(def.companySubtitle);
     setLogoDataUrl(def.logoDataUrl || '');
+    setStoreInchargeSignatureDataUrl(def.storeInchargeSignatureDataUrl || '');
     setAddress(def.address);
     setPhone(def.phone);
     setEmail(def.email);
@@ -252,6 +284,84 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={handleRemoveLogo}
                     className="app-btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
                     title="Remove uploaded logo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Remove</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Store Incharge Digital Signature Upload & Preview */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <PenTool className="w-4 h-4 text-blue-700" />
+                <span className="text-xs font-bold text-neutral-800 tracking-wide">
+                  Default Store Incharge Signature (Fallback)
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-neutral-500">
+                PNG, JPG, WebP or SVG
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* Live Signature Box Preview (matches Loading Slip layout) */}
+              <div className="bg-white border border-neutral-300 rounded-xl px-3 py-2 flex-1 min-w-0 flex flex-col items-center justify-between min-h-[68px]">
+                <span className="text-[10px] font-bold text-neutral-700">
+                  Store Incharge Signature
+                </span>
+                <div className="h-8 w-full flex items-center justify-center my-0.5">
+                  {storeInchargeSignatureDataUrl ? (
+                    <img
+                      src={storeInchargeSignatureDataUrl}
+                      alt="Store Incharge Digital Signature Preview"
+                      className="max-h-8 max-w-[180px] object-contain"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-neutral-400 italic">
+                      No fallback signature uploaded
+                    </span>
+                  )}
+                </div>
+                <div className="w-full border-t border-dashed border-neutral-300 pt-0.5 text-center">
+                  <span className="text-[9.5px] font-semibold text-neutral-500">
+                    Used only if a user has no individual signature in Admin Panel &rarr; Users
+                  </span>
+                </div>
+              </div>
+
+              {/* Upload / Remove Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  ref={signatureInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                  onChange={handleSignatureUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={signatureProcessing}
+                  onClick={() => signatureInputRef.current?.click()}
+                  className="app-btn-sm bg-blue-700 hover:bg-blue-600 text-white shadow-xs"
+                >
+                  {signatureProcessing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span>{storeInchargeSignatureDataUrl ? 'Change Signature' : 'Upload Signature'}</span>
+                </button>
+
+                {storeInchargeSignatureDataUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveSignature}
+                    className="app-btn-sm bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                    title="Remove uploaded signature"
                   >
                     <Trash2 className="w-3.5 h-3.5 shrink-0" />
                     <span>Remove</span>

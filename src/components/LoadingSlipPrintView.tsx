@@ -10,18 +10,30 @@ import { Printer, Download, X, Scissors, CheckCircle2 } from 'lucide-react';
 interface LoadingSlipPrintViewProps {
   ticket: TicketRecord;
   settings: CompanySettings;
+  currentUserId?: string;
   storeInchargeFullName?: string;
+  storeInchargeSignatureDataUrl?: string;
   onClose: () => void;
 }
 
 export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
   ticket,
   settings,
+  currentUserId,
   storeInchargeFullName,
+  storeInchargeSignatureDataUrl,
   onClose,
 }) => {
   const slip = ticket.loadingSlip;
-  const displayStoreInchargeName = (storeInchargeFullName || slip?.storeInchargeName || '').trim();
+  const isDifferentPreparer = Boolean(
+    slip?.storeInchargeUserId && currentUserId && slip.storeInchargeUserId !== currentUserId
+  );
+  const displayStoreInchargeName = isDifferentPreparer
+    ? (slip?.storeInchargeName || storeInchargeFullName || '').trim()
+    : (storeInchargeFullName || slip?.storeInchargeName || '').trim();
+  const displaySignatureDataUrl = isDifferentPreparer
+    ? slip?.storeInchargeSignatureDataUrl || settings.storeInchargeSignatureDataUrl || ''
+    : storeInchargeSignatureDataUrl || settings.storeInchargeSignatureDataUrl || '';
   const items = slip?.items || [];
   // Ensure we always have 8 rows
   const paddedItems = Array.from({ length: 8 }, (_, i) => {
@@ -56,7 +68,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
   }, [liveStatusUrl]);
 
   const handleSavePDF = () => {
-    generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName);
+    generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName, displaySignatureDataUrl);
     setPdfNotice('2-Copy A4 PDF downloaded! Open the PDF file to view or print.');
     setTimeout(() => setPdfNotice(null), 5000);
   };
@@ -78,7 +90,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
     setTimeout(() => {
       window.removeEventListener('beforeprint', onBeforePrint);
       if (!printDialogOpened) {
-        generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName);
+        generateLoadingSlipPDF(ticket, settings, displayStoreInchargeName, displaySignatureDataUrl);
         setPdfNotice('2-Copy A4 PDF downloaded (preview frame restricts browser print popup). Open the PDF to print!');
         setTimeout(() => setPdfNotice(null), 6000);
       }
@@ -103,7 +115,7 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
                 {settings.companyName}
               </h1>
               <p className="text-[9.5px] text-gray-700 font-medium">
-                {settings.address} | Ph: {settings.phone} | GSTIN: {settings.gstin}
+                {[settings.address, settings.phone ? `Ph: ${settings.phone}` : ''].filter(Boolean).join(' | ')}
               </p>
             </div>
           </div>
@@ -295,12 +307,20 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
             </div>
           </div>
           <div className="border border-black/50 p-1 rounded bg-white flex flex-col justify-between min-h-[60px]">
-            <p className="font-bold text-gray-800">Store Incharge Signature</p>
-            <div>
-              <div className="h-4"></div>
-              <div className="border-t border-dashed border-gray-400 pt-0.5 min-h-[14px] flex items-center justify-center">
+            <p className="font-bold text-gray-800 leading-tight">Store Incharge Signature</p>
+            <div className="flex-1 flex flex-col justify-end">
+              <div className="h-[26px] flex items-center justify-center overflow-hidden py-0.5">
+                {displaySignatureDataUrl ? (
+                  <img
+                    src={displaySignatureDataUrl}
+                    alt="Store Incharge Digital Signature"
+                    className="max-h-[24px] max-w-[140px] object-contain block"
+                  />
+                ) : null}
+              </div>
+              <div className="border-t border-dashed border-gray-400 pt-0.5 min-h-[13px] flex items-center justify-center">
                 {displayStoreInchargeName ? (
-                  <span className="font-bold text-black text-[10px] leading-tight">
+                  <span className="font-bold text-black text-[9.5px] leading-tight">
                     {displayStoreInchargeName}
                   </span>
                 ) : null}

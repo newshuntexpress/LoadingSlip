@@ -680,30 +680,30 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Header & Copy Total Action Bar */}
-      <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="surface-3d rounded-2xl p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
           {companyLogoUrl ? (
-            <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center shrink-0 ring-1 ring-[#F0AB00]/60 overflow-hidden p-0.5 shadow-xs">
+            <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shrink-0 ring-2 ring-[#F0AB00]/70 overflow-hidden p-1 shadow-[0_3px_0_#C5D3E2]">
               <img src={companyLogoUrl} alt={facilityName} className="w-full h-full object-contain" />
             </div>
           ) : (
-            <div className="w-10 h-10 rounded-lg bg-[#0A6ED1] text-white flex items-center justify-center shrink-0 ring-1 ring-[#F0AB00]/50">
-              <Truck className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0A6ED1] to-[#084B8A] text-white flex items-center justify-center shrink-0 ring-2 ring-[#F0AB00]/60 shadow-[0_3px_0_#063E75]">
+              <Truck className="w-6 h-6" />
             </div>
           )}
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base sm:text-lg font-black tracking-tight text-[#1C2833]">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-black tracking-tight text-[#1C2833]">
                 Ex-Factory Dispatch Section
               </h2>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-[#EFF4F9] text-[#0A6ED1] border border-[#C2D8EE]">
+              <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-[#EFF4F9] text-[#0A6ED1] border border-[#C2D8EE]">
                 Auto Date: {formatDisplayDate(todayDate)}
               </span>
             </div>
-            <p className="text-xs text-[#5B738B] truncate">
-              Save Ex-Factory Delivery Note, Customer, Truck, Driver, Mobile & Iqama records and copy dispatch summaries
+            <p className="text-xs sm:text-sm text-[#5B738B] truncate mt-0.5">
+              Save Ex-Factory Delivery Note, Customer, Truck, Driver, Mobile &amp; Iqama records and copy dispatch summaries
             </p>
           </div>
         </div>
@@ -773,26 +773,26 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
       </div>
 
       {/* KPI Summary Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5 shadow-xs">
-          <div className="text-[11px] font-bold text-[#5B738B]">Total Listed (Filtered)</div>
-          <div className="text-2xl font-black font-mono tabular-nums text-[#0A6ED1] mt-0.5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="surface-3d surface-3d-hover rounded-2xl p-5">
+          <div className="text-xs font-bold text-[#5B738B]">Total Listed (Filtered)</div>
+          <div className="text-3xl font-black font-mono tabular-nums text-[#0A6ED1] mt-1">
             {filteredEntries.length}
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5 shadow-xs">
-          <div className="text-[11px] font-bold text-[#5B738B]">Today's Ex-Factory</div>
-          <div className="text-2xl font-black font-mono tabular-nums text-[#107E3E] mt-0.5">{todayCount}</div>
+        <div className="surface-3d surface-3d-hover rounded-2xl p-5">
+          <div className="text-xs font-bold text-[#5B738B]">Today's Ex-Factory</div>
+          <div className="text-3xl font-black font-mono tabular-nums text-[#107E3E] mt-1">{todayCount}</div>
         </div>
-        <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5 shadow-xs">
-          <div className="text-[11px] font-bold text-[#5B738B]">Unique Customers</div>
-          <div className="text-2xl font-black font-mono tabular-nums text-[#1C2833] mt-0.5">
+        <div className="surface-3d surface-3d-hover rounded-2xl p-5">
+          <div className="text-xs font-bold text-[#5B738B]">Unique Customers</div>
+          <div className="text-3xl font-black font-mono tabular-nums text-[#1C2833] mt-1">
             {uniqueCustomersCount}
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-[#D1DBE5] p-3.5 shadow-xs">
-          <div className="text-[11px] font-bold text-[#5B738B]">Total All Records</div>
-          <div className="text-2xl font-black font-mono tabular-nums text-[#354A5F] mt-0.5">{entries.length}</div>
+        <div className="surface-3d surface-3d-hover rounded-2xl p-5">
+          <div className="text-xs font-bold text-[#5B738B]">Total All Records</div>
+          <div className="text-3xl font-black font-mono tabular-nums text-[#354A5F] mt-1">{entries.length}</div>
         </div>
       </div>
 
@@ -800,7 +800,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
       {(canCreate || (editingId && canUpdate)) && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs p-4 sm:p-5 space-y-3"
+          className="surface-3d rounded-2xl p-5 sm:p-6 space-y-3.5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[#E3EAF2]">
             <div>
@@ -1133,8 +1133,8 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
       )}
 
       {/* Filter & Register Table */}
-      <div className="bg-white rounded-xl border border-[#D1DBE5] shadow-xs overflow-hidden">
-        <div className="p-3.5 border-b border-[#E3EAF2] bg-[#EFF4F9] flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+      <div className="surface-3d rounded-2xl overflow-hidden">
+        <div className="p-4 border-b border-[#D1DBE5] bg-[#EFF4F9] flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"

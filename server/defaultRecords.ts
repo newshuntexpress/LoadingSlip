@@ -2,7 +2,7 @@ export const DEFAULT_APP_SETTINGS = {
   companyName: 'ARABIAN WATERPROOFING CO. AWAZEL',
   companySubtitle: 'Material Dispatch, Gate Queue & Loading Slip Management System',
   address: 'New industrial city 2 Riyadh KSA 11461',
-  phone: '0550170374',
+  phone: '4981604',
   email: 'dispatch@shreebalajilogistics.com',
   gstin: '',
   gates: ['Gate 1', 'Gate 2', 'Gate 4', 'Gate 5', 'Gate 6'],

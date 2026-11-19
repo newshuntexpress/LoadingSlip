@@ -159,24 +159,24 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
   const slip = data?.slip;
 
   return (
-    <div className="min-h-screen bg-[#EEF2F6] text-[#1C2833] font-sans flex flex-col">
-      {/* Mobile-First Header */}
-      <header className="bg-[#354A5F] text-white border-b border-[#223242] shadow-sm">
-        <div className="h-1 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />
-        <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+    <div className="min-h-screen text-[#1C2833] font-sans flex flex-col">
+      {/* 3D Beveled Mobile-First Header */}
+      <header className="bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white border-b-2 border-[#1B2836] shadow-[0_8px_22px_-6px_rgba(15,23,42,0.45)]">
+        <div className="h-1.5 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />
+        <div className="max-w-2xl mx-auto px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {branding?.logoDataUrl ? (
-              <div className="w-9 h-9 rounded-lg bg-white p-0.5 flex items-center justify-center shrink-0 ring-1 ring-[#F0AB00]/70 overflow-hidden">
+              <div className="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center shrink-0 ring-2 ring-[#F0AB00]/80 shadow-[0_3px_0_#1B2836] overflow-hidden">
                 <img src={branding.logoDataUrl} alt={companyName} className="w-full h-full object-contain" />
               </div>
             ) : (
-              <div className="w-9 h-9 rounded-lg bg-[#0A6ED1] flex items-center justify-center text-[#F0AB00] shrink-0">
-                <Building2 className="w-5 h-5" />
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#0A6ED1] to-[#064A94] flex items-center justify-center text-[#F0AB00] shrink-0 ring-2 ring-[#F0AB00]/80 shadow-[0_3px_0_#1B2836]">
+                <Building2 className="w-6 h-6" />
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="text-sm font-black tracking-wide truncate text-white">{companyName}</h1>
-              <p className="text-[11px] text-[#CBD8E6] truncate">Driver Live Loading Status</p>
+              <h1 className="text-base sm:text-lg font-black tracking-wide truncate text-white">{companyName}</h1>
+              <p className="text-xs text-[#CBD8E6] truncate">Driver Live Loading Status</p>
             </div>
           </div>
 
@@ -184,26 +184,26 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
             type="button"
             onClick={() => fetchStatus(true)}
             disabled={loading || refreshing}
-            className="h-9 px-3 rounded-lg bg-[#243647] hover:bg-[#1C2C3B] text-white border border-[#4A6580] text-xs font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer transition whitespace-nowrap disabled:opacity-60"
+            className="app-btn-sm h-10 px-3.5 rounded-xl bg-[#243647] hover:bg-[#1C2C3B] text-white border border-[#526E8A] shrink-0"
             title="Refresh Live Status"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#F0AB00] ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 text-[#F0AB00] ${refreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-xl mx-auto px-3.5 py-4 space-y-3.5">
+      <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-5 sm:py-7 space-y-5">
         {loading && !data ? (
-          <div className="bg-white rounded-2xl border border-[#D1DBE5] p-10 text-center space-y-3 shadow-xs">
-            <Loader2 className="w-8 h-8 animate-spin text-[#0A6ED1] mx-auto" />
-            <p className="text-sm font-bold text-[#354A5F]">Loading your live gate &amp; queue status...</p>
+          <div className="surface-3d rounded-3xl p-12 text-center space-y-3.5">
+            <Loader2 className="w-9 h-9 animate-spin text-[#0A6ED1] mx-auto" />
+            <p className="text-base font-extrabold text-[#354A5F]">Loading your live gate &amp; queue status...</p>
           </div>
         ) : errorMsg && !data ? (
-          <div className="bg-white rounded-2xl border border-[#F4B8B8] p-6 text-center space-y-3 shadow-xs">
-            <AlertCircle className="w-9 h-9 text-[#BB0000] mx-auto" />
-            <h2 className="text-base font-black text-[#1C2833]">Connection Error</h2>
-            <p className="text-xs text-[#5B738B]">{errorMsg}</p>
+          <div className="surface-3d rounded-3xl border-[#F4B8B8] p-7 text-center space-y-3.5">
+            <AlertCircle className="w-10 h-10 text-[#BB0000] mx-auto" />
+            <h2 className="text-lg font-black text-[#1C2833]">Connection Error</h2>
+            <p className="text-sm text-[#5B738B]">{errorMsg}</p>
             <button
               type="button"
               onClick={() => fetchStatus(false)}
@@ -214,27 +214,27 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
             </button>
           </div>
         ) : data?.expired ? (
-          <div className="bg-white rounded-2xl border border-[#F4B8B8] p-6 text-center space-y-3 shadow-xs">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF0F0] border border-[#F4B8B8] flex items-center justify-center mx-auto text-[#BB0000]">
-              <TimerOff className="w-6 h-6" />
+          <div className="surface-3d rounded-3xl border-[#F4B8B8] p-7 text-center space-y-3.5">
+            <div className="w-14 h-14 rounded-2xl bg-[#FFF0F0] border border-[#F4B8B8] flex items-center justify-center mx-auto text-[#BB0000] inset-3d">
+              <TimerOff className="w-7 h-7" />
             </div>
-            <h2 className="text-base font-black text-[#1C2833]">Status Link Expired</h2>
-            <p className="text-xs text-[#475E75] leading-relaxed">
+            <h2 className="text-lg font-black text-[#1C2833]">Status Link Expired</h2>
+            <p className="text-sm text-[#475E75] leading-relaxed">
               {data.message || 'This Driver Live Loading Status link has expired. Please contact Gate Security or Dispatch.'}
             </p>
             {data.expiredAt && (
-              <p className="text-[11px] font-mono text-[#5B738B] tabular-nums">
+              <p className="text-xs font-mono text-[#5B738B] tabular-nums">
                 Expired at: {formatDateTimeShort(data.expiredAt)}
               </p>
             )}
           </div>
         ) : !data?.found || !slip ? (
-          <div className="bg-white rounded-2xl border border-[#D1DBE5] p-6 text-center space-y-3 shadow-xs">
-            <div className="w-12 h-12 rounded-2xl bg-[#EFF4F9] border border-[#BCC8D4] flex items-center justify-center mx-auto text-[#354A5F]">
-              <AlertCircle className="w-6 h-6" />
+          <div className="surface-3d rounded-3xl p-7 text-center space-y-3.5">
+            <div className="w-14 h-14 rounded-2xl bg-[#EFF4F9] border border-[#BCC8D4] flex items-center justify-center mx-auto text-[#354A5F] inset-3d">
+              <AlertCircle className="w-7 h-7" />
             </div>
-            <h2 className="text-base font-black text-[#1C2833]">Loading Slip Not Found</h2>
-            <p className="text-xs text-[#475E75] leading-relaxed">
+            <h2 className="text-lg font-black text-[#1C2833]">Loading Slip Not Found</h2>
+            <p className="text-sm text-[#475E75] leading-relaxed">
               {data?.message || 'This Driver Live Loading Status link is invalid or no longer active.'}
             </p>
           </div>
@@ -249,28 +249,32 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
 
             return (
               <>
-                {/* 1. Primary Above-the-Fold Hero: GATE NUMBER + QUEUE NUMBER */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#354A5F] text-white rounded-2xl p-4 shadow-sm border border-[#223242] flex flex-col justify-between">
+                {/* 1. Primary Above-the-Fold 3D Hero: GATE NUMBER + QUEUE NUMBER */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gradient-to-b from-[#3E556D] to-[#263748] text-white rounded-2xl p-5 border border-[#4A6580] surface-3d-dark flex flex-col justify-between">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#B8CAE0]">
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-[#B8CAE0]">
                         GATE NUMBER
                       </span>
-                      <DoorOpen className="w-4 h-4 text-[#F0AB00] shrink-0" />
+                      <div className="w-8 h-8 rounded-lg bg-[#1F2F3F] border border-[#4A6580] flex items-center justify-center shrink-0">
+                        <DoorOpen className="w-4 h-4 text-[#F0AB00]" />
+                      </div>
                     </div>
-                    <p className="text-2xl sm:text-3xl font-black tracking-tight text-white mt-2">
+                    <p className="text-3xl sm:text-4xl font-black tracking-tight text-white mt-3">
                       {slip.gateNumber}
                     </p>
                   </div>
 
-                  <div className="bg-[#0A6ED1] text-white rounded-2xl p-4 shadow-sm border border-[#0854A0] flex flex-col justify-between">
+                  <div className="bg-gradient-to-b from-[#0C78E2] to-[#0854A0] text-white rounded-2xl p-5 border border-[#3B97F5] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_5px_0_#063E75,0_16px_32px_-8px_rgba(10,110,209,0.42)] flex flex-col justify-between">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#CBE5FF]">
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-[#CBE5FF]">
                         QUEUE NUMBER
                       </span>
-                      <Truck className="w-4 h-4 text-[#F0AB00] shrink-0" />
+                      <div className="w-8 h-8 rounded-lg bg-[#084B8A] border border-[#3B97F5]/60 flex items-center justify-center shrink-0">
+                        <Truck className="w-4 h-4 text-[#F0AB00]" />
+                      </div>
                     </div>
-                    <p className="text-2xl sm:text-3xl font-black tracking-tight text-white tabular-nums mt-2">
+                    <p className="text-3xl sm:text-4xl font-black tracking-tight text-white tabular-nums mt-3">
                       {slip.status === 'completed'
                         ? 'DONE'
                         : slip.status === 'cancelled'
@@ -281,68 +285,70 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
                 </div>
 
                 {/* 2. Prominent CURRENT STATUS Card */}
-                <section className={`rounded-2xl border p-4 shadow-xs ${style.bg} ${style.border}`}>
+                <section
+                  className={`rounded-2xl border p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_4px_0_#C5D3E2,0_14px_28px_-8px_rgba(24,42,64,0.14)] ${style.bg} ${style.border}`}
+                >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#475E75]">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-[#475E75]">
                       CURRENT LOADING STATUS
                     </span>
-                    <span className="text-[11px] font-mono font-semibold text-[#475E75] tabular-nums">
+                    <span className="text-xs font-mono font-semibold text-[#475E75] tabular-nums">
                       Auto-updating every 10s
                     </span>
                   </div>
 
-                  <div className="mt-2">
+                  <div className="mt-2.5">
                     <span
-                      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm sm:text-base font-black tracking-wide ${style.badgeBg} ${style.badgeText}`}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-base sm:text-lg font-black tracking-wide shadow-[0_3px_0_rgba(0,0,0,0.22)] ${style.badgeBg} ${style.badgeText}`}
                     >
                       {slip.status === 'completed' ? (
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <CheckCircle2 className="w-5 h-5 shrink-0" />
                       ) : slip.status === 'under_loading' ? (
-                        <PackageCheck className="w-4 h-4 shrink-0" />
+                        <PackageCheck className="w-5 h-5 shrink-0" />
                       ) : slip.status === 'called' ? (
-                        <Megaphone className="w-4 h-4 shrink-0" />
+                        <Megaphone className="w-5 h-5 shrink-0" />
                       ) : (
-                        <Clock className="w-4 h-4 shrink-0" />
+                        <Clock className="w-5 h-5 shrink-0" />
                       )}
                       <span>{style.headline}</span>
                     </span>
                   </div>
 
-                  <p className={`text-xs sm:text-sm font-semibold mt-2.5 leading-relaxed ${style.titleColor}`}>
+                  <p className={`text-sm font-semibold mt-3 leading-relaxed ${style.titleColor}`}>
                     {style.instruction}
                   </p>
                 </section>
 
                 {/* 3. Slip & Vehicle Identification Card */}
-                <section className="bg-white rounded-2xl border border-[#D1DBE5] p-4 shadow-xs space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#F7F9FB] rounded-xl p-3 border border-[#E3EAF2]">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5B738B] flex items-center gap-1">
+                <section className="surface-3d rounded-2xl p-5 space-y-3.5">
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div className="bg-[#F4F7FB] rounded-xl p-3.5 border border-[#C8D6E5] inset-3d">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B738B] flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-[#0A6ED1]" />
                         Delivery Number
                       </span>
-                      <p className="text-sm sm:text-base font-black text-[#1C2833] font-mono mt-1 break-all">
+                      <p className="text-base sm:text-lg font-black text-[#1C2833] font-mono mt-1.5 break-all">
                         {slip.delNoteNumber}
                       </p>
                     </div>
 
-                    <div className="bg-[#F7F9FB] rounded-xl p-3 border border-[#E3EAF2]">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5B738B] flex items-center gap-1">
+                    <div className="bg-[#F4F7FB] rounded-xl p-3.5 border border-[#C8D6E5] inset-3d">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B738B] flex items-center gap-1.5">
                         <Truck className="w-3.5 h-3.5 text-[#354A5F]" />
                         Truck Number
                       </span>
-                      <p className="text-sm sm:text-base font-black text-[#1C2833] mt-1 tracking-wide">
+                      <p className="text-base sm:text-lg font-black text-[#1C2833] mt-1.5 tracking-wide">
                         {slip.truckNumber}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#F7F9FB] rounded-xl p-3 border border-[#E3EAF2]">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5B738B] block">
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div className="bg-[#F4F7FB] rounded-xl p-3.5 border border-[#C8D6E5] inset-3d">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B738B] block">
                         Queue Position
                       </span>
-                      <p className="text-xs sm:text-sm font-black text-[#1C2833] tabular-nums mt-1">
+                      <p className="text-sm sm:text-base font-black text-[#1C2833] tabular-nums mt-1.5">
                         {isCompletedOrCancelled
                           ? slip.status === 'completed'
                             ? 'Loading Finished'
@@ -355,19 +361,19 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
                       </p>
                     </div>
 
-                    <div className="bg-[#F7F9FB] rounded-xl p-3 border border-[#E3EAF2]">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#5B738B] block">
+                    <div className="bg-[#F4F7FB] rounded-xl p-3.5 border border-[#C8D6E5] inset-3d">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#5B738B] block">
                         Last Updated Time
                       </span>
-                      <p className="text-xs font-bold text-[#1C2833] font-mono tabular-nums mt-1">
+                      <p className="text-xs sm:text-sm font-bold text-[#1C2833] font-mono tabular-nums mt-1.5">
                         {formatDateTimeShort(slip.lastUpdatedAt)}
                       </p>
                     </div>
                   </div>
 
                   {slip.destinationPlace && (
-                    <div className="flex items-center gap-2 text-xs text-[#475E75] bg-[#F7F9FB] px-3 py-2 rounded-lg border border-[#E3EAF2]">
-                      <MapPin className="w-3.5 h-3.5 text-[#0A6ED1] shrink-0" />
+                    <div className="flex items-center gap-2 text-sm text-[#475E75] bg-[#F4F7FB] px-3.5 py-2.5 rounded-xl border border-[#C8D6E5] inset-3d">
+                      <MapPin className="w-4 h-4 text-[#0A6ED1] shrink-0" />
                       <span>
                         <strong>Destination:</strong> {slip.destinationPlace}
                       </span>
@@ -375,7 +381,7 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
                   )}
 
                   {slip.currentlyLoadingTruck && slip.status !== 'completed' && slip.status !== 'under_loading' && (
-                    <div className="text-xs text-[#354A5F] bg-[#EBF5FF] px-3 py-2 rounded-lg border border-[#B8DCFF]">
+                    <div className="text-sm text-[#354A5F] bg-[#EBF5FF] px-3.5 py-2.5 rounded-xl border border-[#B8DCFF]">
                       Currently loading at {slip.gateNumber}:{' '}
                       <strong className="font-mono">{slip.currentlyLoadingTruck}</strong>
                     </div>
@@ -383,39 +389,39 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
                 </section>
 
                 {/* 4. Loading Progress & Stages */}
-                <section className="bg-white rounded-2xl border border-[#D1DBE5] p-4 shadow-xs space-y-3">
+                <section className="surface-3d rounded-2xl p-5 space-y-3.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black uppercase tracking-wide text-[#354A5F]">
+                    <span className="text-sm font-black uppercase tracking-wide text-[#354A5F]">
                       Loading Progress
                     </span>
-                    <span className="text-xs font-black text-[#0A6ED1] tabular-nums">
+                    <span className="text-sm font-black text-[#0A6ED1] tabular-nums">
                       {slip.progressPercent}%
                     </span>
                   </div>
 
-                  <div className="w-full h-2.5 bg-[#E3EAF2] rounded-full overflow-hidden">
+                  <div className="w-full h-3.5 bg-[#E3EAF2] rounded-full overflow-hidden inset-3d p-0.5">
                     <div
-                      className={`h-full transition-all duration-500 ${
+                      className={`h-full rounded-full transition-all duration-500 ${
                         slip.status === 'completed'
-                          ? 'bg-[#107E3E]'
+                          ? 'bg-gradient-to-r from-[#107E3E] to-[#16A34A]'
                           : slip.status === 'under_loading'
-                          ? 'bg-[#E9730C]'
+                          ? 'bg-gradient-to-r from-[#E9730C] to-[#F59E0B]'
                           : slip.status === 'cancelled'
-                          ? 'bg-[#BB0000]'
-                          : 'bg-[#0A6ED1]'
+                          ? 'bg-gradient-to-r from-[#BB0000] to-[#EF4444]'
+                          : 'bg-gradient-to-r from-[#0A6ED1] to-[#3B82F6]'
                       }`}
                       style={{ width: `${slip.progressPercent}%` }}
                     />
                   </div>
 
                   {slip.totalItemsCount > 0 && (
-                    <p className="text-[11px] font-semibold text-[#475E75] tabular-nums">
+                    <p className="text-xs font-semibold text-[#475E75] tabular-nums">
                       Material Checklist Progress: <strong>{slip.loadedItemsCount}</strong> of{' '}
                       <strong>{slip.totalItemsCount}</strong> line items loaded
                     </p>
                   )}
 
-                  <div className="grid grid-cols-4 gap-1.5 pt-1">
+                  <div className="grid grid-cols-4 gap-2 pt-1">
                     {PROGRESS_STEPS.map((step, idx) => {
                       const Icon = step.icon;
                       const reached = slip.status !== 'cancelled' && idx <= slip.stepIndex;
@@ -423,16 +429,16 @@ export const DriverTokenStatusPage: React.FC<DriverTokenStatusPageProps> = ({
                       return (
                         <div
                           key={step.label}
-                          className={`rounded-xl p-2 text-center border transition ${
+                          className={`rounded-xl p-2.5 text-center border transition ${
                             active
-                              ? 'bg-[#EBF5FF] border-[#0A6ED1] text-[#0854A0]'
+                              ? 'bg-gradient-to-b from-[#EBF5FF] to-[#DBEAFE] border-[#0A6ED1] text-[#0854A0] shadow-[0_3px_0_#93C5FD]'
                               : reached
-                              ? 'bg-[#F1FDF6] border-[#ABE2C2] text-[#107E3E]'
-                              : 'bg-[#F7F9FB] border-[#E3EAF2] text-[#7A8FA3]'
+                              ? 'bg-gradient-to-b from-[#F1FDF6] to-[#DCFCE7] border-[#72C896] text-[#107E3E] shadow-[0_2px_0_#A7F3D0]'
+                              : 'bg-[#F4F7FB] border-[#D1DBE5] text-[#7A8FA3] inset-3d'
                           }`}
                         >
                           <Icon className="w-4 h-4 mx-auto mb-1" />
-                          <span className="block text-[10px] font-bold leading-tight">{step.label}</span>
+                          <span className="block text-[10.5px] font-extrabold leading-tight">{step.label}</span>
                         </div>
                       );
                     })}
