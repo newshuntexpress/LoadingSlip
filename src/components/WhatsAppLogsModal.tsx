@@ -12,12 +12,15 @@ import {
   ExternalLink,
   Search,
   Send,
+  Edit2,
 } from 'lucide-react';
 
 interface WhatsAppLogsModalProps {
   onClose: () => void;
   onRetrySuccess?: (outcome: WhatsAppDispatchOutcome) => void;
   canRetry?: boolean;
+  isAdmin?: boolean;
+  onOpenTemplates?: () => void;
 }
 
 function formatLogTimestamp(ts?: number | null): string {
@@ -41,6 +44,8 @@ export const WhatsAppLogsModal: React.FC<WhatsAppLogsModalProps> = ({
   onClose,
   onRetrySuccess,
   canRetry = true,
+  isAdmin = false,
+  onOpenTemplates,
 }) => {
   const [logs, setLogs] = useState<WhatsAppNotificationLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -195,6 +200,18 @@ export const WhatsAppLogsModal: React.FC<WhatsAppLogsModalProps> = ({
                 <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
+
+              {isAdmin && onOpenTemplates && (
+                <button
+                  type="button"
+                  onClick={onOpenTemplates}
+                  className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#24A159]"
+                  title="Edit & customize WhatsApp message templates"
+                >
+                  <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Edit Templates</span>
+                </button>
+              )}
             </div>
           </div>
 

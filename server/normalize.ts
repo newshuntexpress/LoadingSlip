@@ -93,10 +93,36 @@ export function normalizeDriverRecord<T extends Record<string, any>>(driver: T):
   } as T;
 }
 
+const ALLOWED_WHATSAPP_TEMPLATE_IDS = new Set([
+  'gate_call',
+  'token_generated',
+  'under_loading',
+  'completed_dispatch',
+  'loading_slip_generated',
+]);
+
+export function normalizeWhatsAppTemplates(raw: unknown): Record<string, string> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!ALLOWED_WHATSAPP_TEMPLATE_IDS.has(key)) continue;
+    if (typeof val !== 'string') continue;
+    const normalized = val.replace(/\r\n/g, '\n').slice(0, 4000);
+    if (normalized.trim().length > 0) {
+      result[key] = normalized;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export function normalizeSettingsRecord<T extends Record<string, any>>(settings: T): T {
   if (!settings || typeof settings !== 'object') return settings;
+  const normalizedTemplates =
+    settings.whatsappTemplates !== undefined ? normalizeWhatsAppTemplates(settings.whatsappTemplates) : undefined;
+  const rest = { ...settings };
+  delete rest.whatsappTemplates;
   return {
-    ...settings,
+    ...rest,
     ...(settings.companyName !== undefined ? { companyName: trimStr(settings.companyName) } : {}),
     ...(settings.companySubtitle !== undefined ? { companySubtitle: trimStr(settings.companySubtitle) } : {}),
     ...(settings.address !== undefined ? { address: trimStr(settings.address) } : {}),
@@ -107,5 +133,6 @@ export function normalizeSettingsRecord<T extends Record<string, any>>(settings:
     ...(Array.isArray(settings.gates)
       ? { gates: settings.gates.map((g: unknown) => trimStr(g)).filter(Boolean) }
       : {}),
+    ...(normalizedTemplates ? { whatsappTemplates: normalizedTemplates } : {}),
   } as T;
 }

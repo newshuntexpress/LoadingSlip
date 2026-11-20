@@ -46,6 +46,7 @@ import {
   normalizeTicketRecord,
   normalizeDriverRecord,
   normalizeSettingsRecord,
+  normalizeWhatsAppTemplates,
 } from './server/normalize.ts';
 import {
   ensureDriverSlipToken,
@@ -2980,7 +2981,22 @@ app.put(
   requireCsrf,
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
+    const existingRow = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
+      | { value_json: string }
+      | undefined;
+    const existingSettings = existingRow ? normalizeSettingsRecord(JSON.parse(existingRow.value_json)) : {};
     const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
+    // Preserve custom WhatsApp templates unless modified by an Administrator
+    if (req.auth!.user.roleName !== 'admin') {
+      if (existingSettings.whatsappTemplates) {
+        newSettings.whatsappTemplates = existingSettings.whatsappTemplates;
+      } else {
+        delete newSettings.whatsappTemplates;
+      }
+    } else if (req.body?.whatsappTemplates === undefined && existingSettings.whatsappTemplates) {
+      newSettings.whatsappTemplates = existingSettings.whatsappTemplates;
+    }
+
     const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl, 'Logo');
     if (!logoCheck.ok) {
       res.status(400).json({ error: logoCheck.error });
@@ -3023,7 +3039,21 @@ app.put(
   requireCsrf,
   requirePermission('settings.manage'),
   (req: Request, res: Response) => {
+    const existingRow = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
+      | { value_json: string }
+      | undefined;
+    const existingSettings = existingRow ? normalizeSettingsRecord(JSON.parse(existingRow.value_json)) : {};
     const newSettings = normalizeSettingsRecord({ ...(req.body || {}) });
+    if (req.auth!.user.roleName !== 'admin') {
+      if (existingSettings.whatsappTemplates) {
+        newSettings.whatsappTemplates = existingSettings.whatsappTemplates;
+      } else {
+        delete newSettings.whatsappTemplates;
+      }
+    } else if (req.body?.whatsappTemplates === undefined && existingSettings.whatsappTemplates) {
+      newSettings.whatsappTemplates = existingSettings.whatsappTemplates;
+    }
+
     const logoCheck = validateLogoDataUrl(newSettings.logoDataUrl, 'Logo');
     if (!logoCheck.ok) {
       res.status(400).json({ error: logoCheck.error });
@@ -3059,6 +3089,61 @@ app.put(
     });
 
     res.json({ settings: newSettings, defaultSettings: newSettings });
+  }
+);
+
+app.put(
+  '/api/admin/whatsapp-templates',
+  requireAuth,
+  requirePasswordChanged,
+  requireCsrf,
+  requireAdmin,
+  (req: Request, res: Response) => {
+    const rawTemplates = req.body?.templates;
+    if (!rawTemplates || typeof rawTemplates !== 'object' || Array.isArray(rawTemplates)) {
+      res.status(400).json({ error: 'Invalid templates payload.' });
+      return;
+    }
+
+    const activeRow = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
+      | { value_json: string }
+      | undefined;
+    const baseSettings = activeRow ? normalizeSettingsRecord(JSON.parse(activeRow.value_json)) : {};
+    const normalizedTemplates = normalizeWhatsAppTemplates(rawTemplates);
+
+    const updatedSettings = normalizeSettingsRecord({
+      ...baseSettings,
+      whatsappTemplates: normalizedTemplates || {},
+    });
+    if (!normalizedTemplates) {
+      delete updatedSettings.whatsappTemplates;
+    }
+
+    const now = Date.now();
+    db.prepare(`INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`).run(
+      JSON.stringify(updatedSettings),
+      req.auth!.user.username,
+      now
+    );
+
+    const customKeys = normalizedTemplates ? Object.keys(normalizedTemplates) : [];
+    logAudit({
+      actorUserId: req.auth!.user.id,
+      actorUsername: req.auth!.user.username,
+      action: 'WHATSAPP_TEMPLATES_UPDATED',
+      targetType: 'settings',
+      targetId: 'whatsappTemplates',
+      details:
+        customKeys.length > 0
+          ? `Updated custom WhatsApp templates (${customKeys.join(', ')})`
+          : 'Reset all WhatsApp message templates to defaults',
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({
+      settings: updatedSettings,
+      whatsappTemplates: updatedSettings.whatsappTemplates || {},
+    });
   }
 );
 

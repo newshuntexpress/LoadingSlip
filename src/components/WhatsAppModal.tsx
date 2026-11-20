@@ -22,7 +22,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
   const [phoneNumber, setPhoneNumber] = useState<string>(() => formatSaudiPhoneNumber(ticket.driverPhone || ''));
   const [customMessage, setCustomMessage] = useState<string>(() => {
     const tpl = WHATSAPP_TEMPLATES.find((t) => t.id === initialTemplateId) || WHATSAPP_TEMPLATES[0];
-    return tpl.generateText(ticket, settings.companyName);
+    return tpl.generateText(ticket, settings.companyName, settings.whatsappTemplates);
   });
   const [copied, setCopied] = useState(false);
   const [autoUpdateStatus, setAutoUpdateStatus] = useState(true);
@@ -49,7 +49,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
     setSelectedTemplateId(id);
     const tpl = WHATSAPP_TEMPLATES.find((t) => t.id === id);
     if (tpl) {
-      setCustomMessage(tpl.generateText(ticket, settings.companyName));
+      setCustomMessage(tpl.generateText(ticket, settings.companyName, settings.whatsappTemplates));
     }
   };
 
@@ -209,6 +209,7 @@ export const WhatsAppModal: React.FC<WhatsAppModalProps> = ({
                 Customize message before sending:
               </label>
               <textarea
+                data-preserve-case="true"
                 value={customMessage}
                 onChange={(e) => setCustomMessage(e.target.value)}
                 rows={3}

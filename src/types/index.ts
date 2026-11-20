@@ -108,6 +108,7 @@ export interface CompanySettings {
   ticketPrefix: string;
   autoPrintTokenAfterSave?: boolean; // New setting
   sessionIdleMinutes?: number;
+  whatsappTemplates?: Record<string, string>;
 }
 
 export interface PublicBranding {

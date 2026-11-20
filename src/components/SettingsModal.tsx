@@ -19,16 +19,28 @@ import {
   Building2,
   Loader2,
   PenTool,
+  MessageSquare,
+  Edit2,
 } from 'lucide-react';
 
 interface SettingsModalProps {
   settings: CompanySettings;
+  isAdmin?: boolean;
+  canViewWhatsAppLogs?: boolean;
+  waPendingRetryCount?: number;
+  onOpenWhatsAppLogs?: () => void;
+  onOpenWhatsAppTemplates?: () => void;
   onSave: (newSettings: CompanySettings) => void;
   onClose: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
+  isAdmin = false,
+  canViewWhatsAppLogs = true,
+  waPendingRetryCount = 0,
+  onOpenWhatsAppLogs,
+  onOpenWhatsAppTemplates,
   onSave,
   onClose,
 }) => {
@@ -142,6 +154,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       autoPrintTokenAfterSave,
       sessionIdleMinutes: Math.max(5, Math.min(720, Number(sessionIdleMinutes) || 30)),
       gates: finalGates,
+      ...(settings.whatsappTemplates ? { whatsappTemplates: settings.whatsappTemplates } : {}),
     };
   };
 
@@ -483,6 +496,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="w-5 h-5 text-blue-600 rounded border-blue-300 focus:ring-blue-500 cursor-pointer"
             />
           </div>
+
+          {/* WhatsApp Notification Logs & Templates */}
+          {((canViewWhatsAppLogs && onOpenWhatsAppLogs) || (isAdmin && onOpenWhatsAppTemplates)) && (
+            <div className="bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-emerald-950 block">
+                  WhatsApp Messaging &amp; Logs
+                </span>
+                <p className="text-[11px] text-emerald-800">
+                  Review dispatch delivery logs, retry failed sends, or edit message templates.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {canViewWhatsAppLogs && onOpenWhatsAppLogs && (
+                  <button
+                    type="button"
+                    onClick={onOpenWhatsAppLogs}
+                    className="app-btn-sm bg-[#2B3E50] hover:bg-[#3A526A] text-white border border-[#4A6580]"
+                    title="Automatic WhatsApp Notification Logs & Retry"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-[#68D391] shrink-0" />
+                    <span>WA Logs</span>
+                    {waPendingRetryCount > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
+                        {waPendingRetryCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {isAdmin && onOpenWhatsAppTemplates && (
+                  <button
+                    type="button"
+                    onClick={onOpenWhatsAppTemplates}
+                    className="app-btn-sm bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#24A159]"
+                    title="Admin: Customize WhatsApp Message Templates"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-white shrink-0" />
+                    <span>WA Templates</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Gate Management */}
           <div className="bg-neutral-50 p-3.5 rounded-xl border border-neutral-200">

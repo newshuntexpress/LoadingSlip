@@ -40,8 +40,8 @@ git push -u origin main
    - *(Optional)* `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`
 5. Click **Deploy**.
 6. Open your live domain and sign in with the default Administrator credentials:
-   - **Username**: `admin` (or your `ADMIN_INITIAL_USERNAME` env var)
-   - **Password**: `Admin@1234` (or your `ADMIN_INITIAL_PASSWORD` env var)
+   - **Username**: `munnayadav` (or your `ADMIN_INITIAL_USERNAME` env var)
+   - **Password**: `Yadav@1977` (or your `ADMIN_INITIAL_PASSWORD` env var)
    - *(Recommended: change the default password from your profile or Admin Dashboard after first login.)*
 
 ---

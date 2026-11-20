@@ -24,6 +24,7 @@ import { LoginView } from './components/LoginView';
 import { DriverStatusView } from './components/DriverStatusView';
 import { DriverTokenStatusPage } from './components/DriverTokenStatusPage';
 import { WhatsAppLogsModal } from './components/WhatsAppLogsModal';
+import { WhatsAppTemplatesModal } from './components/WhatsAppTemplatesModal';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import {
@@ -109,6 +110,7 @@ export default function App() {
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showWhatsAppLogsModal, setShowWhatsAppLogsModal] = useState(false);
+  const [showWhatsAppTemplatesModal, setShowWhatsAppTemplatesModal] = useState(false);
   const [mobileHeaderMenuOpen, setMobileHeaderMenuOpen] = useState(false);
   const [waPendingRetryCount, setWaPendingRetryCount] = useState(0);
   const [waToast, setWaToast] = useState<{
@@ -231,6 +233,7 @@ export default function App() {
     setShowDailyReportModal(false);
     setShowSettingsModal(false);
     setShowWhatsAppLogsModal(false);
+    setShowWhatsAppTemplatesModal(false);
     setMobileHeaderMenuOpen(false);
     setWaPendingRetryCount(0);
     setWaToast(null);
@@ -964,17 +967,17 @@ export default function App() {
   return (
     <div className="min-h-screen text-[#1C2833] font-sans flex flex-col">
       {/* Top 3D Beveled Command Header */}
-      <header className="print:hidden bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white sticky top-0 z-40 border-b border-[#1A2836] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_0_#1D2B3A,0_14px_28px_-6px_rgba(15,23,42,0.35)]">
-        <div className="h-1.5 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />
+      <header className="print:hidden bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white sticky top-0 z-40 border-b border-[#1A2836] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_0_#1D2B3A,0_10px_20px_-6px_rgba(15,23,42,0.3)]">
+        <div className="h-1 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />
 
         {/* Mobile Compact Header Bar (< md): Left 3-Dots Button + Company Brand & Current Section */}
-        <div className="md:hidden px-3.5 py-2.5 flex items-center gap-3">
+        <div className="md:hidden px-3 py-2 flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setMobileHeaderMenuOpen(true)}
             aria-label="Open sections and tools menu"
             aria-expanded={mobileHeaderMenuOpen}
-            className="btn-3d relative w-11 h-11 rounded-xl bg-gradient-to-b from-[#2B3E50] to-[#1F3040] hover:from-[#3A526A] hover:to-[#243647] border border-[#526E8A] text-white flex items-center justify-center shrink-0 cursor-pointer"
+            className="btn-3d relative w-10 h-10 rounded-xl bg-gradient-to-b from-[#2B3E50] to-[#1F3040] hover:from-[#3A526A] hover:to-[#243647] border border-[#526E8A] text-white flex items-center justify-center shrink-0 cursor-pointer"
           >
             <MoreVertical className="w-5 h-5 text-[#F0AB00]" />
             {waPendingRetryCount > 0 && !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && (
@@ -984,9 +987,9 @@ export default function App() {
             )}
           </button>
 
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {settings.logoDataUrl ? (
-              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0 ring-2 ring-[#F0AB00]/80 overflow-hidden p-0.5 shadow-[0_3px_0_#1B2836]">
+              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center shrink-0 ring-1 ring-[#F0AB00]/80 overflow-hidden p-0.5 shadow-[0_2px_0_#1B2836]">
                 <img
                   src={settings.logoDataUrl}
                   alt={settings.companyName}
@@ -994,15 +997,15 @@ export default function App() {
                 />
               </div>
             ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1882EB] via-[#0A6ED1] to-[#00448E] flex items-center justify-center text-[#F0AB00] shrink-0 ring-2 ring-[#F0AB00]/70 shadow-[0_3px_0_#002E61]">
-                <Building2 className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#1882EB] via-[#0A6ED1] to-[#00448E] flex items-center justify-center text-[#F0AB00] shrink-0 ring-1 ring-[#F0AB00]/70 shadow-[0_2px_0_#002E61]">
+                <Building2 className="w-4 h-4" />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-black tracking-wide text-white truncate">
+              <h1 className="text-xs font-black tracking-wide text-white truncate">
                 {settings.companyName}
               </h1>
-              <p className="text-[11px] text-[#CBD8E6] truncate">
+              <p className="text-[10px] text-[#CBD8E6] truncate">
                 <span className="text-[#F0AB00] font-extrabold">{activeSectionLabel}</span>
                 {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly
                   ? ` · ${formatDisplayDate(selectedDate)}`
@@ -1012,18 +1015,18 @@ export default function App() {
           </div>
         </div>
 
-        {/* Desktop & Tablet Full Command Header (>= md) */}
-        <div className="hidden md:block max-w-[1480px] mx-auto px-4 sm:px-8 py-3.5 space-y-3">
-          {/* Upper Row: Company Brand Plaque + Account & Auth Controls */}
+        {/* Desktop & Tablet Compact Centered Command Header (>= md) */}
+        <div className="hidden md:block max-w-[1440px] mx-auto px-3 sm:px-5 py-1.5 space-y-1.5">
+          {/* Upper Row: Compact Centered Brand + Account & Auth Controls */}
           <div
-            className={`flex flex-col items-center justify-center text-center gap-3 ${
-              !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly ? 'pb-3 border-b border-white/15' : ''
+            className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 ${
+              !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly ? 'pb-1.5 border-b border-white/15' : ''
             }`}
           >
-            {/* Logo & Company Title */}
-            <div className="flex items-center justify-center gap-3.5 min-w-0 max-w-full">
+            {/* Compact Logo & Company Title */}
+            <div className="flex items-center gap-2 min-w-0 max-w-full">
               {settings.logoDataUrl ? (
-                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shrink-0 ring-2 ring-[#F0AB00]/80 overflow-hidden p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_0_#1B2836,0_8px_16px_rgba(0,0,0,0.35)]">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0 ring-1 ring-[#F0AB00]/80 overflow-hidden p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_0_#1B2836]">
                   <img
                     src={settings.logoDataUrl}
                     alt={settings.companyName}
@@ -1031,17 +1034,17 @@ export default function App() {
                   />
                 </div>
               ) : (
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1882EB] via-[#0A6ED1] to-[#00448E] flex items-center justify-center text-[#F0AB00] shrink-0 ring-2 ring-[#F0AB00]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_4px_0_#002E61,0_8px_16px_rgba(0,0,0,0.35)]">
-                  <Building2 className="w-6 h-6" />
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1882EB] via-[#0A6ED1] to-[#00448E] flex items-center justify-center text-[#F0AB00] shrink-0 ring-1 ring-[#F0AB00]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_2px_0_#002E61]">
+                  <Building2 className="w-4 h-4" />
                 </div>
               )}
-              <div className="min-w-0 text-left sm:text-center">
-                <div className="flex items-center justify-start sm:justify-center gap-2.5 flex-wrap">
-                  <h1 className="text-base sm:text-xl font-black tracking-wide text-white truncate drop-shadow-xs">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-xs sm:text-sm font-black tracking-wide text-white truncate drop-shadow-xs">
                     {settings.companyName}
                   </h1>
                   <span
-                    className={`hidden md:inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-extrabold border whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_2px_0_rgba(0,0,0,0.28)] ${
+                    className={`hidden lg:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold border whitespace-nowrap ${
                       isForkliftOperator
                         ? 'bg-[#1D3E35] text-[#68D391] border-[#2E6B5A]'
                         : isLiquidStoreOnly
@@ -1052,78 +1055,74 @@ export default function App() {
                     }`}
                   >
                     {isForkliftOperator
-                      ? 'Forklift Operator Section'
+                      ? 'Forklift Section'
                       : isLiquidStoreOnly
-                      ? 'Liquid Material Camp Store'
+                      ? 'Liquid Store'
                       : isExFactoryOnly
-                      ? 'Ex-Factory Dispatch'
+                      ? 'Ex-Factory'
                       : 'Gate Queue & Dispatch'}
                   </span>
                 </div>
-                <p className="text-xs text-[#D5E1EE] truncate max-w-xs sm:max-w-2xl mx-auto mt-0.5">
+                <p className="text-[10px] text-[#D5E1EE] truncate max-w-md leading-tight">
                   {settings.companySubtitle}
                 </p>
               </div>
             </div>
 
-            {/* Centered Account Info & Uniform Auth Action Buttons */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2.5 w-full">
-              <div className="flex items-center justify-center gap-2 bg-[#1F3040] border border-[#45607A] rounded-xl h-11 px-4 shrink-0 w-full sm:w-auto shadow-[inset_0_2px_5px_rgba(0,0,0,0.28),0_1px_0_rgba(255,255,255,0.14)]">
-                <UserIcon className="w-4 h-4 text-[#F0AB00] shrink-0" />
-                <span className="text-[13px] font-extrabold text-white truncate max-w-[160px]">
+            {/* Compact Account Info & Auth Action Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              <div className="flex items-center gap-1.5 bg-[#1F3040] border border-[#45607A] rounded-lg h-7 px-2 shrink-0 shadow-[inset_0_1px_4px_rgba(0,0,0,0.28)]">
+                <UserIcon className="w-3 h-3 text-[#F0AB00] shrink-0" />
+                <span className="text-[11px] font-extrabold text-white truncate max-w-[130px]">
                   {currentUser.fullName}
                 </span>
-                <span className="text-xs text-[#B8CAE0] whitespace-nowrap">
+                <span className="text-[10.5px] text-[#B8CAE0] whitespace-nowrap hidden xl:inline">
                   @{currentUser.username} · {currentUser.roleDisplayName}
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#0A6ED1] hover:bg-[#085CAF] text-white border border-[#3B93EE] shadow-sm"
-                    title="Admin Dashboard: Users, Permissions, Sessions & Audit Log"
-                  >
-                    <Shield className="w-3.5 h-3.5 text-white shrink-0" />
-                    <span>Admin Users</span>
-                  </button>
-                )}
-
+              {isAdmin && (
                 <button
                   type="button"
-                  onClick={() => setShowChangePasswordModal(true)}
-                  className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
-                  title="Change My Password"
+                  onClick={() => setShowAdminModal(true)}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#0A6ED1] hover:bg-[#085CAF] text-white border border-[#3B93EE]"
+                  title="Admin Dashboard: Users, Permissions, Sessions & Audit Log"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
-                  <span>Password</span>
+                  <Shield className="w-3 h-3 text-white shrink-0" />
+                  <span>Admin Users</span>
                 </button>
+              )}
 
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[110px] bg-[#BB0000] hover:bg-[#9E0000] text-white border border-[#E04F4F] shadow-sm ${
-                    isAdmin ? 'col-span-2 sm:col-span-1' : ''
-                  }`}
-                  title="Sign Out Securely"
-                >
-                  <LogOut className="w-3.5 h-3.5 shrink-0" />
-                  <span>Logout</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowChangePasswordModal(true)}
+                className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
+                title="Change My Password"
+              >
+                <KeyRound className="w-3 h-3 text-[#F0AB00] shrink-0" />
+                <span>Password</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#BB0000] hover:bg-[#9E0000] text-white border border-[#E04F4F]"
+                title="Sign Out Securely"
+              >
+                <LogOut className="w-3 h-3 shrink-0" />
+                <span>Logout</span>
+              </button>
             </div>
           </div>
 
-          {/* Lower Toolbar Row: Centered Date Picker & Uniform Autofit Action Buttons (Hidden for Restricted Single-Section Roles) */}
+          {/* Lower Centered Compact Toolbar Row: Date Picker & Quick Action Buttons */}
           {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && (
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2.5">
-              {/* Date Switcher (Exact h-11 3D match) */}
-              <div className="relative inline-flex items-center justify-between sm:justify-center h-11 bg-[#2B3E50] hover:bg-[#3A526A] rounded-xl border border-[#4F6B88] px-3.5 gap-2 w-full sm:w-auto shrink-0 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_3px_0_#192735,0_6px_12px_rgba(0,0,0,0.22)]">
-                <div className="flex items-center gap-2 pointer-events-none">
-                  <Calendar className="w-4 h-4 text-[#F0AB00] shrink-0" />
-                  <span className="text-[13px] font-black tracking-wide text-white whitespace-nowrap select-none font-mono">
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {/* Compact Date Switcher */}
+              <div className="relative inline-flex items-center h-7 bg-[#2B3E50] hover:bg-[#3A526A] rounded-lg border border-[#4F6B88] px-2 gap-1 shrink-0 transition shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_2px_0_#192735]">
+                <div className="flex items-center gap-1 pointer-events-none">
+                  <Calendar className="w-3 h-3 text-[#F0AB00] shrink-0" />
+                  <span className="text-[11px] font-black tracking-wide text-white whitespace-nowrap select-none font-mono">
                     {formatDisplayDate(selectedDate)}
                   </span>
                 </div>
@@ -1147,7 +1146,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setSelectedDate(getTodayDateString())}
-                    className="relative z-10 h-6 px-2 text-[10px] bg-[#0A6ED1] hover:bg-[#085CAF] text-white rounded font-bold cursor-pointer transition whitespace-nowrap"
+                    className="relative z-10 h-5 px-1.5 text-[10px] bg-[#0A6ED1] hover:bg-[#085CAF] text-white rounded font-bold cursor-pointer transition whitespace-nowrap"
                     title="Switch to Today"
                   >
                     Today
@@ -1155,92 +1154,171 @@ export default function App() {
                 )}
               </div>
 
-              {/* Responsive Autofit Utility & Primary CTA Buttons */}
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
-                {/* Driver Master */}
-                {canManageDrivers && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDriverMasterModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
-                    title="Driver & Vehicle Master Directory"
-                  >
-                    <Users className="w-4 h-4 text-[#F0AB00] shrink-0" />
-                    <span>Driver Master</span>
-                  </button>
-                )}
+              {canManageDrivers && (
+                <button
+                  type="button"
+                  onClick={() => setShowDriverMasterModal(true)}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
+                  title="Driver & Vehicle Master Directory"
+                >
+                  <Users className="w-3 h-3 text-[#F0AB00] shrink-0" />
+                  <span>Driver Master</span>
+                </button>
+              )}
 
-                {/* Daily Report */}
-                {canViewReports && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDailyReportModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#24A159] shadow-sm"
-                    title="Daily Reports & Data Backup"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-white shrink-0" />
-                    <span>Daily Report</span>
-                  </button>
-                )}
+              {canViewReports && (
+                <button
+                  type="button"
+                  onClick={() => setShowDailyReportModal(true)}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#107E3E] hover:bg-[#0D6B34] text-white border border-[#24A159]"
+                  title="Daily Reports & Data Backup"
+                >
+                  <FileSpreadsheet className="w-3 h-3 text-white shrink-0" />
+                  <span>Daily Report</span>
+                </button>
+              )}
 
-                {/* Driver Status Live Screen */}
-                {canViewTickets && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDriverStatusView(true);
-                      window.history.replaceState(null, '', '/#driver-status');
-                    }}
-                    className="app-btn w-full sm:w-auto sm:min-w-[132px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
-                    title="Driver Live Loading Status Screen (12-Hour Lookup)"
-                  >
-                    <Truck className="w-4 h-4 text-[#F0AB00] shrink-0" />
-                    <span>Driver Status</span>
-                  </button>
-                )}
+              {canViewTickets && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDriverStatusView(true);
+                    window.history.replaceState(null, '', '/#driver-status');
+                  }}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
+                  title="Driver Live Loading Status Screen (12-Hour Lookup)"
+                >
+                  <Truck className="w-3 h-3 text-[#F0AB00] shrink-0" />
+                  <span>Driver Status</span>
+                </button>
+              )}
 
-                {/* WhatsApp Notification Logs & Retry Queue */}
-                {canViewTickets && (
-                  <button
-                    type="button"
-                    onClick={() => setShowWhatsAppLogsModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[128px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
-                    title="Automatic WhatsApp Notification Logs & Retry"
-                  >
-                    <MessageSquare className="w-4 h-4 text-[#68D391] shrink-0" />
-                    <span>WA Logs</span>
-                    {waPendingRetryCount > 0 && (
-                      <span className="ml-0.5 px-1.5 py-0.5 text-[10px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
-                        {waPendingRetryCount}
-                      </span>
-                    )}
-                  </button>
-                )}
+              {canManageSettings && (
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(true)}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2 !text-[11px] !gap-1 bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
+                  title="Plant Settings, Gates & WhatsApp Tools"
+                >
+                  <Settings className="w-3 h-3 text-[#68AEFF] shrink-0" />
+                  <span>Settings</span>
+                  {waPendingRetryCount > 0 && (
+                    <span className="ml-0.5 px-1 py-0 text-[9.5px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
+                      {waPendingRetryCount}
+                    </span>
+                  )}
+                </button>
+              )}
 
-                {/* Plant Settings (Admin only) */}
-                {canManageSettings && (
-                  <button
-                    type="button"
-                    onClick={() => setShowSettingsModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[120px] bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580] shadow-sm"
-                    title="Plant Settings & Gates"
-                  >
-                    <Settings className="w-4 h-4 text-[#68AEFF] shrink-0" />
-                    <span>Settings</span>
-                  </button>
-                )}
+              {canCreateTickets && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewTicketModal(true)}
+                  className="app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !gap-1 bg-[#F0AB00] hover:bg-[#FFC11E] text-[#1C2833] font-black border border-[#FFD154]"
+                >
+                  <Plus className="w-3 h-3 shrink-0" />
+                  <span>New Gate Ticket</span>
+                </button>
+              )}
 
-                {/* New Ticket Button - Primary SAP Gold Emphasized CTA */}
-                {canCreateTickets && (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewTicketModal(true)}
-                    className="app-btn w-full sm:w-auto sm:min-w-[148px] col-span-2 sm:col-span-1 bg-[#F0AB00] hover:bg-[#FFC11E] text-[#1C2833] font-black shadow-md border border-[#FFD154]"
-                  >
-                    <Plus className="w-4 h-4 shrink-0" />
-                    <span>New Gate Ticket</span>
-                  </button>
-                )}
+              {/* Recessed Compact 3D Section Tab Dock in Header Toolbar */}
+              <div className="w-full pt-1 flex justify-center">
+                <div className="inset-3d inline-flex flex-wrap items-center justify-center bg-[#E4ECF5] p-1 rounded-xl gap-1 border border-[#C6D4E3]">
+                  {canViewTickets && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('dashboard')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'dashboard'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <LayoutDashboard
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'dashboard' ? 'text-white' : 'text-[#0A6ED1]'
+                        }`}
+                      />
+                      <span>Live Monitor</span>
+                    </button>
+                  )}
+
+                  {canViewTickets && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('list')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'list'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <TableIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'list' ? 'text-white' : 'text-[#354A5F]'
+                        }`}
+                      />
+                      <span>All Tickets Ledger ({dayTickets.length})</span>
+                    </button>
+                  )}
+
+                  {canOperateForklift && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('forklift')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'forklift'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <PackageCheck
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'forklift' ? 'text-white' : 'text-[#107E3E]'
+                        }`}
+                      />
+                      <span>Forklift Loading ({pendingForkliftCount})</span>
+                    </button>
+                  )}
+
+                  {canAccessLiquidStore && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('liquid')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'liquid'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <Droplets
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'liquid' ? 'text-white' : 'text-[#0070F2]'
+                        }`}
+                      />
+                      <span>Liquid Store</span>
+                    </button>
+                  )}
+
+                  {canAccessExFactory && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('exfactory')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'exfactory'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <Truck
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'exfactory' ? 'text-white' : 'text-[#E9730C]'
+                        }`}
+                      />
+                      <span>Ex-Factory</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1548,27 +1626,6 @@ export default function App() {
                       </button>
                     )}
 
-                    {canViewTickets && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMobileHeaderMenuOpen(false);
-                          setShowWhatsAppLogsModal(true);
-                        }}
-                        className="app-btn w-full justify-between bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4 text-[#68D391] shrink-0" />
-                          <span>WA Logs</span>
-                        </span>
-                        {waPendingRetryCount > 0 && (
-                          <span className="px-2 py-0.5 text-[11px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
-                            {waPendingRetryCount}
-                          </span>
-                        )}
-                      </button>
-                    )}
-
                     {canManageSettings && (
                       <button
                         type="button"
@@ -1576,10 +1633,17 @@ export default function App() {
                           setMobileHeaderMenuOpen(false);
                           setShowSettingsModal(true);
                         }}
-                        className="app-btn w-full justify-start bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
+                        className="app-btn w-full justify-between bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]"
                       >
-                        <Settings className="w-4 h-4 text-[#68AEFF] shrink-0" />
-                        <span>Settings</span>
+                        <span className="inline-flex items-center gap-2">
+                          <Settings className="w-4 h-4 text-[#68AEFF] shrink-0" />
+                          <span>Settings</span>
+                        </span>
+                        {waPendingRetryCount > 0 && (
+                          <span className="px-2 py-0.5 text-[11px] font-black rounded-full bg-[#BB0000] text-white tabular-nums">
+                            {waPendingRetryCount}
+                          </span>
+                        )}
                       </button>
                     )}
                   </div>
@@ -1636,8 +1700,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Spacious 3D Content Area */}
-      <main className="max-w-[1480px] mx-auto px-4 sm:px-8 py-6 sm:py-7 flex-1 w-full space-y-6">
+      {/* Main Centered Autofit 3D Content Area */}
+      <main className="max-w-[1440px] mx-auto px-3 sm:px-6 py-4 sm:py-5 flex-1 w-full space-y-4">
         {appError && (
           <div
             role="alert"
@@ -1790,159 +1854,55 @@ export default function App() {
           </div>
         )}
 
-        {/* Navigation Tabs (Desktop/Tablet) and Search / Filter Bar */}
-        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && (
-          <div
-            className={`surface-3d p-3.5 sm:p-4 rounded-2xl flex-col lg:flex-row lg:items-center justify-between gap-3.5 ${
-              activeTab === 'forklift' || activeTab === 'liquid' || activeTab === 'exfactory'
-                ? 'hidden md:flex'
-                : 'flex'
-            }`}
-          >
-            {/* Recessed 3D Tab Dock (Desktop/Tablet >= md; on mobile these live in the left 3-dots drawer) */}
-            <div className="inset-3d hidden md:flex md:flex-wrap items-center bg-[#E4ECF5] p-1.5 rounded-xl gap-1.5 w-full lg:w-auto border border-[#C6D4E3]">
-              {canViewTickets && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[152px] !rounded-lg ${
-                    activeTab === 'dashboard'
-                      ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                      : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                  }`}
-                >
-                  <LayoutDashboard
-                    className={`w-4 h-4 shrink-0 ${
-                      activeTab === 'dashboard' ? 'text-white' : 'text-[#0A6ED1]'
-                    }`}
-                  />
-                  <span>Live Monitor</span>
-                </button>
-              )}
-
-              {canViewTickets && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('list')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[172px] !rounded-lg ${
-                    activeTab === 'list'
-                      ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                      : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                  }`}
-                >
-                  <TableIcon
-                    className={`w-4 h-4 shrink-0 ${
-                      activeTab === 'list' ? 'text-white' : 'text-[#354A5F]'
-                    }`}
-                  />
-                  <span>All Tickets Ledger ({dayTickets.length})</span>
-                </button>
-              )}
-
-              {canOperateForklift && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('forklift')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[184px] !rounded-lg ${
-                    activeTab === 'forklift'
-                      ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                      : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                  }`}
-                >
-                  <PackageCheck
-                    className={`w-4 h-4 shrink-0 ${
-                      activeTab === 'forklift' ? 'text-white' : 'text-[#107E3E]'
-                    }`}
-                  />
-                  <span>Forklift Loading ({pendingForkliftCount})</span>
-                </button>
-              )}
-
-              {canAccessLiquidStore && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('liquid')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[208px] !rounded-lg ${
-                    activeTab === 'liquid'
-                      ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                      : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                  }`}
-                >
-                  <Droplets
-                    className={`w-4 h-4 shrink-0 ${
-                      activeTab === 'liquid' ? 'text-white' : 'text-[#0070F2]'
-                    }`}
-                  />
-                  <span>Liquid Material Camp Store</span>
-                </button>
-              )}
-
-              {canAccessExFactory && (
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('exfactory')}
-                  className={`app-btn w-full sm:w-auto sm:min-w-[148px] !rounded-lg ${
-                    activeTab === 'exfactory'
-                      ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                      : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                  }`}
-                >
-                  <Truck
-                    className={`w-4 h-4 shrink-0 ${
-                      activeTab === 'exfactory' ? 'text-white' : 'text-[#E9730C]'
-                    }`}
-                  />
-                  <span>Ex-Factory</span>
-                </button>
-              )}
-            </div>
-
-            {/* Search & Filters (for Monitor & Ledger tabs) */}
-            {activeTab !== 'forklift' && activeTab !== 'liquid' && activeTab !== 'exfactory' && (
-              <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-                {/* Search */}
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-4 h-4 absolute left-3.5 top-3 text-[#5B738B] pointer-events-none" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search truck, driver, ticket..."
-                    className="inset-3d w-full h-11 pl-10 pr-3.5 text-sm rounded-xl border border-[#C2D0DF] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] focus:border-[#0A6ED1] bg-[#F4F8FC] text-[#1C2833] font-medium"
-                  />
-                </div>
-
-                {/* Gate Filter */}
-                <select
-                  value={gateFilter}
-                  onChange={(e) => setGateFilter(e.target.value)}
-                  className="inset-3d h-11 text-sm font-bold px-3.5 rounded-xl border border-[#C2D0DF] bg-[#F4F8FC] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
-                >
-                  <option value="ALL">All Gates</option>
-                  {settings.gates.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Status Filter */}
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="inset-3d h-11 text-sm font-bold px-3.5 rounded-xl border border-[#C2D0DF] bg-[#F4F8FC] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
-                >
-                  <option value="ALL">All Status</option>
-                  <option value="waiting">Waiting in Queue</option>
-                  <option value="called">Called to Gate</option>
-                  <option value="under_loading">Under Loading</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+        {/* Search & Filters Bar (for Monitor & Ledger tabs) */}
+        {!isForkliftOperator &&
+          !isLiquidStoreOnly &&
+          !isExFactoryOnly &&
+          activeTab !== 'forklift' &&
+          activeTab !== 'liquid' &&
+          activeTab !== 'exfactory' && (
+            <div className="surface-3d p-2.5 sm:p-3 rounded-2xl flex flex-wrap items-center justify-center gap-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[180px] sm:max-w-xs">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#5B738B] pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search truck, driver, ticket..."
+                  className="inset-3d w-full h-9 pl-8.5 pr-3 text-xs rounded-lg border border-[#C2D0DF] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] focus:border-[#0A6ED1] bg-[#F4F8FC] text-[#1C2833] font-medium"
+                />
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Gate Filter */}
+              <select
+                value={gateFilter}
+                onChange={(e) => setGateFilter(e.target.value)}
+                className="inset-3d h-9 text-xs font-bold px-2.5 rounded-lg border border-[#C2D0DF] bg-[#F4F8FC] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
+              >
+                <option value="ALL">All Gates</option>
+                {settings.gates.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="inset-3d h-9 text-xs font-bold px-2.5 rounded-lg border border-[#C2D0DF] bg-[#F4F8FC] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
+              >
+                <option value="ALL">All Status</option>
+                <option value="waiting">Waiting in Queue</option>
+                <option value="called">Called to Gate</option>
+                <option value="under_loading">Under Loading</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          )}
 
         {/* Tab 1: Live Gate Queue Dashboard */}
         {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewTickets && activeTab === 'dashboard' && (
@@ -2145,6 +2105,17 @@ export default function App() {
       {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showSettingsModal && canManageSettings && (
         <SettingsModal
           settings={settings}
+          isAdmin={isAdmin}
+          canViewWhatsAppLogs={canViewTickets}
+          waPendingRetryCount={waPendingRetryCount}
+          onOpenWhatsAppLogs={() => {
+            setShowSettingsModal(false);
+            setShowWhatsAppLogsModal(true);
+          }}
+          onOpenWhatsAppTemplates={() => {
+            setShowSettingsModal(false);
+            setShowWhatsAppTemplatesModal(true);
+          }}
           onSave={(newSettings) => {
             setSettings(newSettings);
             setPublicBranding({
@@ -2192,6 +2163,11 @@ export default function App() {
       {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showWhatsAppLogsModal && canViewTickets && (
         <WhatsAppLogsModal
           canRetry={canUpdateTickets}
+          isAdmin={isAdmin}
+          onOpenTemplates={() => {
+            setShowWhatsAppLogsModal(false);
+            setShowWhatsAppTemplatesModal(true);
+          }}
           onRetrySuccess={() => {
             loadData();
           }}
@@ -2199,6 +2175,18 @@ export default function App() {
             setShowWhatsAppLogsModal(false);
             loadData();
           }}
+        />
+      )}
+
+      {/* 12. Admin WhatsApp Message Templates Editor Modal */}
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && showWhatsAppTemplatesModal && isAdmin && (
+        <WhatsAppTemplatesModal
+          settings={settings}
+          onSaved={(updatedSettings) => {
+            setSettings(updatedSettings);
+            loadData();
+          }}
+          onClose={() => setShowWhatsAppTemplatesModal(false)}
         />
       )}
 

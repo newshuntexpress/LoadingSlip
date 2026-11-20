@@ -211,6 +211,28 @@ export function markDriverTokenCompleted(ticketId: string): void {
   ).run(now, nextExpiresAt, ticketId);
 }
 
+function getActiveWhatsAppTemplateOverrides(): {
+  companyName: string;
+  loadingSlipTemplate?: string;
+} {
+  try {
+    const row = db.prepare(`SELECT value_json FROM app_settings WHERE key = 'active'`).get() as
+      | { value_json: string }
+      | undefined;
+    if (!row?.value_json) {
+      return { companyName: 'ARABIAN WATERPROOFING CO. AWAZEL' };
+    }
+    const parsed = JSON.parse(row.value_json);
+    const tpl = parsed?.whatsappTemplates?.loading_slip_generated;
+    return {
+      companyName: String(parsed?.companyName || 'ARABIAN WATERPROOFING CO. AWAZEL').trim(),
+      loadingSlipTemplate: typeof tpl === 'string' && tpl.trim().length > 0 ? tpl : undefined,
+    };
+  } catch {
+    return { companyName: 'ARABIAN WATERPROOFING CO. AWAZEL' };
+  }
+}
+
 export function buildLoadingSlipWhatsAppMessage(params: {
   delNoteNumber: string;
   truckNumber: string;
@@ -218,8 +240,30 @@ export function buildLoadingSlipWhatsAppMessage(params: {
   queueNumber: number | string;
   statusLabel?: string;
   liveStatusUrl: string;
+  driverName?: string;
+  ticketNumber?: string;
+  destinationPlace?: string;
 }): string {
   const statusText = params.statusLabel || 'Waiting in Queue';
+  const overrides = getActiveWhatsAppTemplateOverrides();
+  if (overrides.loadingSlipTemplate) {
+    const values: Record<string, string> = {
+      companyName: overrides.companyName,
+      driverName: params.driverName || 'Partner',
+      delNoteNumber: params.delNoteNumber || 'N/A',
+      truckNumber: params.truckNumber || 'N/A',
+      ticketNumber: params.ticketNumber || '—',
+      gateNumber: params.gateNumber || 'Gate 1',
+      queueNumber: String(params.queueNumber || '-'),
+      gateSequenceNumber: String(params.queueNumber || '-'),
+      destinationPlace: params.destinationPlace || 'N/A',
+      statusLabel: statusText,
+      liveStatusUrl: params.liveStatusUrl,
+    };
+    return overrides.loadingSlipTemplate.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) =>
+      Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match
+    );
+  }
   return [
     '🚛 *Loading Status Update*',
     '',
@@ -418,6 +462,7 @@ export async function dispatchLoadingSlipWhatsAppNotification(params: {
   const truckNumber = upperStr(ticket.truckNumber) || '—';
   const driverName = upperStr(ticket.driverName) || '';
   const ticketNumber = upperStr(ticket.ticketNumber) || '';
+  const destinationPlace = upperStr(ticket.destinationPlace || ticket.loadingSlip?.placeName) || '';
   const statusLabel = getStatusLabelForMessage(ticket.status);
 
   const phoneCheck = validateAndFormatWhatsAppPhone(ticket.driverPhone);
@@ -428,6 +473,9 @@ export async function dispatchLoadingSlipWhatsAppNotification(params: {
     queueNumber: effectiveQueueNum,
     statusLabel,
     liveStatusUrl,
+    driverName,
+    ticketNumber,
+    destinationPlace,
   });
 
   const now = Date.now();

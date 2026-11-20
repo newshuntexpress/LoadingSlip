@@ -495,6 +495,18 @@ export const ApiClient = {
     return res.settings;
   },
 
+  async updateWhatsAppTemplates(
+    templates: Record<string, string>
+  ): Promise<{ settings: CompanySettings; whatsappTemplates: Record<string, string> }> {
+    return request<{ settings: CompanySettings; whatsappTemplates: Record<string, string> }>(
+      '/api/admin/whatsapp-templates',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ templates }),
+      }
+    );
+  },
+
   async exportBackup(): Promise<Record<string, unknown>> {
     return request('/api/backup/export');
   },

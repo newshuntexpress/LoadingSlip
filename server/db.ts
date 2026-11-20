@@ -526,16 +526,60 @@ function seedDatabase(): void {
   }
 
   // Auto-seed default administrator when database has no users (supports env override)
+  const defaultAdminUsername = (process.env.ADMIN_INITIAL_USERNAME || 'munnayadav').trim() || 'munnayadav';
+  const defaultAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'Yadav@1977';
   const userCountRow = db.prepare(`SELECT COUNT(*) as cnt FROM users`).get() as { cnt: number };
   if (userCountRow.cnt === 0) {
-    const defaultAdminUsername = (process.env.ADMIN_INITIAL_USERNAME || 'admin').trim() || 'admin';
-    const defaultAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || 'Admin@1234';
     const hash = bcrypt.hashSync(defaultAdminPassword, 12);
     const adminId = `usr_${crypto.randomUUID()}`;
     db.prepare(
       `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'system', ?, ?)`
     ).run(adminId, defaultAdminUsername, 'System Administrator', '', hash, 'role_admin', now, now);
+  }
+
+  // One-time sync: ensure default admin credentials (munnayadav / Yadav@1977) exist on existing DBs
+  const defaultAdminSynced = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'default_admin_munnayadav_v1'`)
+    .get() as { key: string } | undefined;
+  if (!defaultAdminSynced) {
+    db.transaction(() => {
+      const hash = bcrypt.hashSync(defaultAdminPassword, 12);
+      const existingTarget = db
+        .prepare(`SELECT id FROM users WHERE username = ? COLLATE NOCASE`)
+        .get(defaultAdminUsername) as { id: string } | undefined;
+
+      if (existingTarget) {
+        db.prepare(
+          `UPDATE users
+           SET username = ?, password_hash = ?, role_id = 'role_admin', is_active = 1,
+               must_change_password = 0, failed_login_attempts = 0, locked_until = NULL, updated_at = ?
+           WHERE id = ?`
+        ).run(defaultAdminUsername, hash, now, existingTarget.id);
+      } else {
+        const seededAdmin = db
+          .prepare(`SELECT id FROM users WHERE username = 'admin' AND created_by = 'system'`)
+          .get() as { id: string } | undefined;
+        if (seededAdmin) {
+          db.prepare(
+            `UPDATE users
+             SET username = ?, password_hash = ?, role_id = 'role_admin', is_active = 1,
+                 must_change_password = 0, failed_login_attempts = 0, locked_until = NULL, updated_at = ?
+             WHERE id = ?`
+          ).run(defaultAdminUsername, hash, now, seededAdmin.id);
+        } else {
+          const adminId = `usr_${crypto.randomUUID()}`;
+          db.prepare(
+            `INSERT INTO users (id, username, full_name, email, password_hash, role_id, is_active, must_change_password, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, 0, 'system', ?, ?)`
+          ).run(adminId, defaultAdminUsername, 'System Administrator', '', hash, 'role_admin', now, now);
+        }
+      }
+
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default_admin_munnayadav_v1', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
   }
 
   seedLiquidStoreIfEmpty();
