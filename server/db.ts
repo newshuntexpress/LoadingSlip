@@ -240,6 +240,7 @@ db.exec(`
     driver_name TEXT DEFAULT '',
     mobile_number TEXT DEFAULT '',
     iqama_number TEXT DEFAULT '',
+    loading_slip_json TEXT DEFAULT '',
     created_by TEXT,
     updated_by TEXT,
     created_at INTEGER NOT NULL,
@@ -301,6 +302,9 @@ db.exec(`
   const exColNames = new Set(exCols.map((c) => c.name));
   if (!exColNames.has('driver_name')) {
     db.exec(`ALTER TABLE ex_factory_entries ADD COLUMN driver_name TEXT DEFAULT ''`);
+  }
+  if (!exColNames.has('loading_slip_json')) {
+    db.exec(`ALTER TABLE ex_factory_entries ADD COLUMN loading_slip_json TEXT DEFAULT ''`);
   }
 }
 

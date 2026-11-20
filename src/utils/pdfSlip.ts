@@ -162,6 +162,7 @@ function drawSingleSlipCopy(
   doc.line(innerX, gridY + row1H, innerX + innerW, gridY + row1H);
 
   // Row 1 cells
+  const isExFactory = ticket.gateNumber === 'EX-FACTORY';
   const r1Cells = [
     { label: 'Del Note No:', value: slip?.delNoteNumber || ticket.delNoteNumber || '—', bold: true, size: 9 },
     {
@@ -170,10 +171,17 @@ function drawSingleSlipCopy(
       bold: true,
       size: 7.5,
     },
-    { label: 'Ticket No:', value: `${ticket.ticketNumber} (#${ticket.sequenceNumber})`, bold: true, size: 7.5 },
     {
-      label: 'Gate & Queue Pos:',
-      value: `${ticket.gateNumber} (Seq. #${ticket.gateSequenceNumber})`,
+      label: isExFactory ? 'Ref No:' : 'Ticket No:',
+      value: `${ticket.ticketNumber} (#${ticket.sequenceNumber})`,
+      bold: true,
+      size: 7.5,
+    },
+    {
+      label: isExFactory ? 'Dispatch Mode:' : 'Gate & Queue Pos:',
+      value: isExFactory
+        ? `EX-FACTORY (#${ticket.gateSequenceNumber})`
+        : `${ticket.gateNumber} (Seq. #${ticket.gateSequenceNumber})`,
       bold: true,
       size: 8.5,
     },
@@ -250,11 +258,11 @@ function drawSingleSlipCopy(
   );
   curX += colWidths[2];
 
-  // Col 3: Transporter
+  // Col 3: Transporter / Customer Name
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(90, 90, 90);
-  doc.text('Transporter:', curX + 1.5, r2Y + 3.2);
+  doc.text(isExFactory ? 'Customer Name:' : 'Transporter:', curX + 1.5, r2Y + 3.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.8);
   doc.setTextColor(0, 0, 0);

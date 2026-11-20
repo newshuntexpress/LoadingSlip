@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import { AuthUser, DriverMasterRecord, ExFactoryEntry } from '../types';
+import { AuthUser, CompanySettings, DriverMasterRecord, ExFactoryEntry, TicketRecord } from '../types';
 import { ApiClient } from '../services/api';
 import { formatDisplayDate, getTodayDateString } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
+import { LoadingSlipModal } from './LoadingSlipModal';
+import { LoadingSlipPrintView } from './LoadingSlipPrintView';
 import {
   Truck,
   Plus,
@@ -21,11 +23,14 @@ import {
   X,
   RefreshCw,
   Eye,
+  FileText,
+  Printer,
 } from 'lucide-react';
 
 interface ExFactoryViewProps {
   currentUser: AuthUser;
   drivers: DriverMasterRecord[];
+  settings: CompanySettings;
   facilityName: string;
   companyLogoUrl?: string;
   canCreate?: boolean;
@@ -74,9 +79,54 @@ function formatRecordSummaryForChat(record: {
   ].join(' # ');
 }
 
+function formatExFactoryTime(timestampMs: number): string {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Riyadh',
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(timestampMs));
+  } catch {
+    return new Date(timestampMs).toLocaleTimeString('en-US', {
+      hour12: true,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+}
+
+function exFactoryToTicketRecord(entry: ExFactoryEntry, srNo: number): TicketRecord {
+  const safeSeq = Math.max(1, srNo);
+  const cleanDate = (entry.entryDate || getTodayDateString()).replace(/-/g, '');
+  return {
+    id: entry.id,
+    ticketNumber: `EXF-${cleanDate}-${String(safeSeq).padStart(3, '0')}`,
+    sequenceNumber: safeSeq,
+    date: entry.entryDate,
+    timeIn: formatExFactoryTime(entry.createdAt || Date.now()),
+    gateNumber: 'EX-FACTORY',
+    gateSequenceNumber: safeSeq,
+    truckNumber: entry.truckNumber,
+    driverName: entry.driverName || '',
+    driverPhone: entry.mobileNumber || '',
+    iqamaNumber: entry.iqamaNumber || '',
+    transporterName: entry.customerName || 'EX-FACTORY',
+    destinationPlace: entry.loadingSlip?.placeName || 'EX-FACTORY',
+    delNoteNumber: entry.delNoteNumber,
+    status: 'waiting',
+    loadingSlip: entry.loadingSlip,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    createdBy: entry.createdBy,
+    updatedBy: entry.updatedBy,
+  };
+}
+
 export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
   currentUser,
   drivers,
+  settings,
   facilityName,
   companyLogoUrl,
   canCreate = true,
@@ -110,6 +160,8 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
   const [confirmDelete, setConfirmDelete] = useState<ExFactoryEntry | null>(null);
   const [lastSavedEntry, setLastSavedEntry] = useState<ExFactoryEntry | null>(null);
   const [showSharePreview, setShowSharePreview] = useState(false);
+  const [activeEntryForSlip, setActiveEntryForSlip] = useState<{ entry: ExFactoryEntry; srNo: number } | null>(null);
+  const [activeEntryForPrintSlip, setActiveEntryForPrintSlip] = useState<{ entry: ExFactoryEntry; srNo: number } | null>(null);
 
   // Driver / Iqama Lookup & Suggestions
   type DriverLookupItem = {
@@ -291,8 +343,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveEntryCore = async (openSlipAfterSave = false) => {
     const cleanDn = delNoteNumber.trim().toUpperCase();
     const cleanCust = customerName.trim().toUpperCase();
     const cleanTruck = truckNumber.trim().toUpperCase();
@@ -308,8 +359,9 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     setSaving(true);
     try {
       const autoDate = editingId ? entryDate : getTodayDateString();
+      let savedRecord: ExFactoryEntry;
       if (editingId) {
-        const updated = await ApiClient.updateExFactoryEntry(editingId, {
+        savedRecord = await ApiClient.updateExFactoryEntry(editingId, {
           entryDate: autoDate,
           delNoteNumber: cleanDn,
           customerName: cleanCust,
@@ -318,11 +370,11 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           mobileNumber: cleanMobile,
           iqamaNumber: cleanIqama,
         });
-        setEntries((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-        setLastSavedEntry(updated);
-        showToast('success', `Updated Ex-Factory entry (${updated.delNoteNumber}).`);
+        setEntries((prev) => prev.map((item) => (item.id === savedRecord.id ? savedRecord : item)));
+        setLastSavedEntry(savedRecord);
+        showToast('success', `Updated Ex-Factory entry (${savedRecord.delNoteNumber}).`);
       } else {
-        const created = await ApiClient.createExFactoryEntry({
+        savedRecord = await ApiClient.createExFactoryEntry({
           entryDate: autoDate,
           delNoteNumber: cleanDn,
           customerName: cleanCust,
@@ -331,15 +383,51 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           mobileNumber: cleanMobile,
           iqamaNumber: cleanIqama,
         });
-        setEntries((prev) => [created, ...prev]);
-        setLastSavedEntry(created);
-        showToast('success', `Saved Ex-Factory entry (${created.delNoteNumber} · ${created.truckNumber}).`);
+        setEntries((prev) => [savedRecord, ...prev]);
+        setLastSavedEntry(savedRecord);
+        showToast('success', `Saved Ex-Factory entry (${savedRecord.delNoteNumber} · ${savedRecord.truckNumber}).`);
       }
       resetForm();
+      if (openSlipAfterSave) {
+        setActiveEntryForSlip({ entry: savedRecord, srNo: 1 });
+      }
     } catch (err: any) {
       showToast('error', err?.message || 'Failed to save Ex-Factory entry.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await saveEntryCore(false);
+  };
+
+  const handleSaveExFactoryLoadingSlip = async (
+    updatedTicket: TicketRecord,
+    openPrintDirectly?: boolean
+  ) => {
+    if (!activeEntryForSlip || !updatedTicket.loadingSlip) return;
+    const targetSrNo = activeEntryForSlip.srNo;
+    try {
+      const updatedEntry = await ApiClient.saveExFactoryLoadingSlip(activeEntryForSlip.entry.id, {
+        loadingSlip: updatedTicket.loadingSlip,
+        truckNumber: updatedTicket.truckNumber,
+        driverName: updatedTicket.driverName,
+        mobileNumber: updatedTicket.driverPhone,
+      });
+      setEntries((prev) => prev.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
+      setLastSavedEntry((prev) => (prev?.id === updatedEntry.id ? updatedEntry : prev));
+      setActiveEntryForSlip(null);
+      showToast(
+        'success',
+        `Loading Slip saved for ${updatedEntry.delNoteNumber} (${updatedEntry.loadingSlip?.totalQty || 0} Qty · ${updatedEntry.loadingSlip?.totalPallets || 0} Pallets).`
+      );
+      if (openPrintDirectly) {
+        setActiveEntryForPrintSlip({ entry: updatedEntry, srNo: targetSrNo });
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Failed to save Ex-Factory Loading Slip.');
     }
   };
 
@@ -1111,13 +1199,23 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={resetForm}
                 className="app-btn bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]"
               >
                 Clear
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => saveEntryCore(true)}
+                className="app-btn bg-[#0A6ED1] hover:bg-[#085CAF] text-white shadow-xs"
+                title="Save entry and immediately create its 8-row Loading Slip"
+              >
+                <FileText className="w-4 h-4 shrink-0" />
+                <span>{editingId ? 'Update & Loading Slip' : 'Save & Loading Slip'}</span>
               </button>
               <button
                 type="submit"
@@ -1215,6 +1313,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
                 <th className="py-2.5 px-3 font-bold whitespace-nowrap">Truck No.</th>
                 <th className="py-2.5 px-3 font-bold whitespace-nowrap">Mobile No.</th>
                 <th className="py-2.5 px-3 font-bold whitespace-nowrap">Iqama No.</th>
+                <th className="py-2.5 px-3 font-bold whitespace-nowrap">Loading Slip</th>
                 <th className="py-2.5 px-3 font-bold whitespace-nowrap">Saved By</th>
                 <th className="py-2.5 px-3 font-bold text-right whitespace-nowrap">Actions</th>
               </tr>
@@ -1222,20 +1321,21 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-10 text-center text-[#5B738B]">
+                  <td colSpan={12} className="py-10 text-center text-[#5B738B]">
                     <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[#0A6ED1]" />
                     Loading Ex-Factory entries...
                   </td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-10 text-center text-[#5B738B]">
+                  <td colSpan={12} className="py-10 text-center text-[#5B738B]">
                     No Ex-Factory entries found for this filter. Add a new entry above.
                   </td>
                 </tr>
               ) : (
                 filteredEntries.map((item, idx) => {
                   const checked = selectedIds.includes(item.id);
+                  const slip = item.loadingSlip;
                   return (
                     <tr
                       key={item.id}
@@ -1262,11 +1362,59 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
                       <td className="py-2.5 px-3 font-mono font-bold whitespace-nowrap">{item.truckNumber}</td>
                       <td className="py-2.5 px-3 font-mono whitespace-nowrap">{item.mobileNumber || '—'}</td>
                       <td className="py-2.5 px-3 font-mono whitespace-nowrap">{item.iqamaNumber || '—'}</td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {slip && (slip.totalQty > 0 || slip.totalPallets > 0) ? (
+                          <div className="space-y-0.5">
+                            <div className="text-[10px] flex gap-1 font-medium tabular-nums">
+                              <span className="bg-[#EBF5FF] text-[#0854A0] border border-[#B8DCFF] px-1.5 rounded font-bold">
+                                {slip.totalQty} Qty
+                              </span>
+                              <span className="bg-[#FEF7F1] text-[#A64B00] border border-[#F9C99B] px-1.5 rounded font-bold">
+                                {slip.totalPallets} Pallets
+                              </span>
+                              <span className="bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4] px-1.5 rounded font-bold">
+                                {slip.totalLooseRolls} Loose
+                              </span>
+                            </div>
+                            {slip.placeName && (
+                              <span className="text-[10px] text-[#5B738B] block font-semibold truncate max-w-[160px]">
+                                {slip.placeName}
+                              </span>
+                            )}
+                          </div>
+                        ) : slip ? (
+                          <span className="text-[10px] text-[#0A6ED1] font-semibold">Slip Prepared</span>
+                        ) : (
+                          <span className="text-[11px] text-[#7A8FA3] italic">No slip created</span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-[#5B738B] whitespace-nowrap">
                         {item.createdBy || currentUser.username}
                       </td>
                       <td className="py-2.5 px-3 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
+                          {(canUpdate || canCreate) && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveEntryForSlip({ entry: item, srNo: idx + 1 })}
+                              className="app-btn-sm bg-[#0A6ED1] hover:bg-[#085CAF] text-white shadow-xs"
+                              title="Generate or edit 8-row loading slip"
+                            >
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span>{slip ? 'Edit Slip' : 'Create Slip'}</span>
+                            </button>
+                          )}
+                          {slip && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveEntryForPrintSlip({ entry: item, srNo: idx + 1 })}
+                              className="app-btn-sm bg-[#354A5F] hover:bg-[#243647] text-white shadow-xs"
+                              title="Print 2-Copy A4 Single Sheet Preview"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
+                              <span>Print Slip</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleCopySingleRow(item)}
@@ -1314,7 +1462,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
                     TOTAL EX-FACTORY ENTRIES: {filteredEntries.length}
                     {selectedIds.length > 0 ? ` (${selectedIds.length} selected for copy)` : ''}
                   </td>
-                  <td colSpan={7} className="py-2.5 px-3 text-right">
+                  <td colSpan={8} className="py-2.5 px-3 text-right">
                     <button
                       type="button"
                       onClick={handleCopyTotalSummary}
@@ -1368,6 +1516,32 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Ex-Factory 8-Row Loading Slip Modal (Identical to Main Section) */}
+      {activeEntryForSlip && (
+        <LoadingSlipModal
+          ticket={exFactoryToTicketRecord(activeEntryForSlip.entry, activeEntryForSlip.srNo)}
+          settings={settings}
+          currentUserId={currentUser.id}
+          storeInchargeFullName={currentUser.fullName}
+          storeInchargeSignatureDataUrl={currentUser.signatureDataUrl}
+          isExFactory
+          onSave={handleSaveExFactoryLoadingSlip}
+          onClose={() => setActiveEntryForSlip(null)}
+        />
+      )}
+
+      {/* Ex-Factory 2-Copy A4 Loading Slip Print Preview */}
+      {activeEntryForPrintSlip && (
+        <LoadingSlipPrintView
+          ticket={exFactoryToTicketRecord(activeEntryForPrintSlip.entry, activeEntryForPrintSlip.srNo)}
+          settings={settings}
+          currentUserId={currentUser.id}
+          storeInchargeFullName={currentUser.fullName}
+          storeInchargeSignatureDataUrl={currentUser.signatureDataUrl}
+          onClose={() => setActiveEntryForPrintSlip(null)}
+        />
       )}
 
       {/* Floating Feedback Toast */}

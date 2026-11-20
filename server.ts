@@ -2040,9 +2040,20 @@ app.patch(
         };
       }
 
-      // Preserve 'Waiting in Queue' when newly generating a Loading Slip unless explicitly changed
+      // Editing or saving a Loading Slip sets status to 'waiting' (Waiting in Queue) and schedules 30-min auto Under Loading
       const requestedStatus = typeof cleanUpdatesWithUserSig.status === 'string' ? cleanUpdatesWithUserSig.status : undefined;
-      const hasManualStatusChange = Boolean(requestedStatus && requestedStatus !== prev.status);
+      const isSlipQueueReset = Boolean(
+        cleanUpdatesWithUserSig.loadingSlip &&
+          !prev.loadingSlip?.isLocked &&
+          requestedStatus === 'waiting' &&
+          cleanUpdatesWithUserSig.manualStatusOverride === false
+      );
+      const hasManualStatusChange = !isSlipQueueReset && Boolean(requestedStatus && requestedStatus !== prev.status);
+      const configuredDelayMin = getConfiguredAutoLoadingMinutes();
+      const slipDelayMin = isSlipQueueReset
+        ? clampAutoLoadingMinutes(cleanUpdatesWithUserSig.autoLoadingMinutes ?? prev.autoLoadingMinutes ?? configuredDelayMin)
+        : undefined;
+
       const merged = normalizeTicketRecord({
         ...prev,
         ...cleanUpdatesWithUserSig,
@@ -2050,7 +2061,20 @@ app.patch(
         ticketNumber: prev.ticketNumber,
         sequenceNumber: prev.sequenceNumber,
         createdAt: prev.createdAt || now,
-        manualStatusOverride: hasManualStatusChange ? true : Boolean(prev.manualStatusOverride),
+        ...(isSlipQueueReset
+          ? {
+              status: 'waiting',
+              manualStatusOverride: false,
+              autoUnderLoadingApplied: false,
+              autoLoadingMinutes: slipDelayMin,
+              autoUnderLoadingAt: now + slipDelayMin! * 60 * 1000,
+              autoStatusUpdatedAt: undefined,
+              timeLoadingStarted: '',
+              timeCompleted: '',
+            }
+          : {
+              manualStatusOverride: hasManualStatusChange ? true : Boolean(prev.manualStatusOverride),
+            }),
         updatedAt: now,
       });
       const nextVersion = existing.version + 1;

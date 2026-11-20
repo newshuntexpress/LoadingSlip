@@ -22,6 +22,7 @@ interface LoadingSlipModalProps {
   currentUserId?: string;
   storeInchargeFullName?: string;
   storeInchargeSignatureDataUrl?: string;
+  isExFactory?: boolean;
   onSave: (updatedTicket: TicketRecord, openPrintDirectly?: boolean) => void;
   onClose: () => void;
 }
@@ -32,6 +33,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   currentUserId,
   storeInchargeFullName,
   storeInchargeSignatureDataUrl,
+  isExFactory = false,
   onSave,
   onClose,
 }) => {
@@ -54,7 +56,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
     existingSlip?.delNoteNumber || ticket.delNoteNumber || 'A1DD00001'
   );
   const [placeName, setPlaceName] = useState<string>(
-    existingSlip?.placeName || ticket.destinationPlace || ''
+    existingSlip?.placeName || ticket.destinationPlace || (isExFactory ? 'EX-FACTORY' : '')
   );
   const [driverName, setDriverName] = useState<string>(ticket.driverName);
   const [driverPhone, setDriverPhone] = useState<string>(() => formatSaudiPhoneNumber(ticket.driverPhone));
@@ -276,21 +278,16 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
     const updatedSlip = buildSlipData();
     const formattedPhone = formatSaudiPhoneNumber(driverPhone);
     const nowTime = getCurrentTimeString();
-    const hasExistingSlip = Boolean(
-      existingSlip &&
-        (String(existingSlip.delNoteNumber || '').trim() ||
-          (Array.isArray(existingSlip.items) &&
-            existingSlip.items.some(
-              (it) => String(it?.description || '').trim() || String(it?.qty || '').trim()
-            )))
-    );
-    const nextStatus = markCompleteOnSave
-      ? 'completed'
-      : hasExistingSlip
-      ? ticket.status
-      : 'waiting';
+    const nowMs = Date.now();
+    const delayMinutes =
+      ticket.autoLoadingMinutes && ticket.autoLoadingMinutes >= 30
+        ? ticket.autoLoadingMinutes
+        : 30;
+    const isManualComplete = !isExFactory && markCompleteOnSave;
+    const nextStatus = isManualComplete ? 'completed' : 'waiting';
     const updatedTicket: TicketRecord = {
       ...ticket,
+      delNoteNumber: delNoteNumber.trim().toUpperCase(),
       truckNumber: truckNumber.trim().toUpperCase(),
       driverName: driverName.trim().toUpperCase(),
       driverPhone: formattedPhone,
@@ -298,12 +295,12 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       destinationPlace: placeName.trim().toUpperCase(),
       loadingSlip: updatedSlip,
       status: nextStatus,
-      timeLoadingStarted:
-        nextStatus === 'waiting'
-          ? ticket.timeLoadingStarted
-          : ticket.timeLoadingStarted || nowTime,
-      timeCompleted: markCompleteOnSave ? (ticket.timeCompleted || nowTime) : undefined,
-      manualStatusOverride: markCompleteOnSave ? true : ticket.manualStatusOverride,
+      timeLoadingStarted: isManualComplete ? ticket.timeLoadingStarted || nowTime : '',
+      timeCompleted: isManualComplete ? ticket.timeCompleted || nowTime : '',
+      manualStatusOverride: isManualComplete ? true : false,
+      autoUnderLoadingApplied: false,
+      autoLoadingMinutes: delayMinutes,
+      autoUnderLoadingAt: nowMs + delayMinutes * 60 * 1000,
     };
 
     onSave(updatedTicket, printDirectly);
@@ -319,9 +316,13 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
               <FileText className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">Generate Material Loading Slip</h2>
+              <h2 className="text-lg font-bold">
+                {isExFactory ? 'Ex-Factory Material Loading Slip' : 'Generate Material Loading Slip'}
+              </h2>
               <p className="text-xs text-blue-100">
-                Ticket: {ticket.ticketNumber} | Gate: {ticket.gateNumber} (Pos #{ticket.gateSequenceNumber}) | Truck: {ticket.truckNumber}
+                {isExFactory
+                  ? `Ex-Factory Dispatch | Ref: ${ticket.ticketNumber} | Customer: ${ticket.transporterName || '—'} | Truck: ${ticket.truckNumber}`
+                  : `Ticket: ${ticket.ticketNumber} | Gate: ${ticket.gateNumber} (Pos #${ticket.gateSequenceNumber}) | Truck: ${ticket.truckNumber}`}
               </p>
             </div>
           </div>
@@ -738,32 +739,39 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                   <span>{validationError}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
-                <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>
-                  {!existingSlip ? (
-                    <>
-                      Generating this loading slip keeps the status as{' '}
-                      <strong className="font-extrabold">Waiting in Queue</strong> and automatically sends a WhatsApp message with the live queue link to the driver.
-                    </>
-                  ) : (
-                    <>
-                      Saving updates the loading slip materials while preserving the current queue progress and preventing duplicate WhatsApp messages.
-                    </>
-                  )}
-                </span>
-              </div>
-              <label className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={markCompleteOnSave}
-                  onChange={(e) => setMarkCompleteOnSave(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 rounded border-neutral-300 focus:ring-emerald-500"
-                />
-                <span className="text-xs text-neutral-800">
-                  <span className="font-bold text-emerald-800">Mark as Completed (Optional):</span> Change vehicle status to &apos;Completed&apos; immediately upon saving instead of &apos;Waiting in Queue&apos;.
-                </span>
-              </label>
+              {!isExFactory && (
+                <>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                    <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>
+                      {!existingSlip ? (
+                        <>
+                          Saving this loading slip sets the status to{' '}
+                          <strong className="font-extrabold">Waiting in Queue</strong>, automatically transitions to{' '}
+                          <strong className="font-extrabold">Under Loading</strong> after 30 minutes (manual status changes remain available anytime), and sends the live queue WhatsApp link to the driver.
+                        </>
+                      ) : (
+                        <>
+                          Editing &amp; saving this loading slip sets status to{' '}
+                          <strong className="font-extrabold">Waiting in Queue</strong> and automatically switches to{' '}
+                          <strong className="font-extrabold">Under Loading</strong> after 30 minutes (you can also change the status manually anytime).
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={markCompleteOnSave}
+                      onChange={(e) => setMarkCompleteOnSave(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded border-neutral-300 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs text-neutral-800">
+                      <span className="font-bold text-emerald-800">Mark as Completed (Optional):</span> Change vehicle status to &apos;Completed&apos; immediately upon saving instead of &apos;Waiting in Queue&apos;.
+                    </span>
+                  </label>
+                </>
+              )}
             </div>
           )}
 

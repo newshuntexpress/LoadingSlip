@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { db, logAudit } from './db.ts';
-import { upperStr } from './normalize.ts';
+import { upperStr, normalizeLoadingSlip } from './normalize.ts';
 import {
   getClientIp,
   requireAuth,
@@ -20,6 +20,7 @@ interface DbExFactoryRow {
   driver_name: string;
   mobile_number: string;
   iqama_number: string;
+  loading_slip_json: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: number;
@@ -39,7 +40,21 @@ function getTodayPlantDateString(): string {
   }
 }
 
+function parseSlipJson(raw: string | null | undefined): Record<string, any> | undefined {
+  if (!raw || !raw.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return normalizeLoadingSlip(parsed);
+    }
+  } catch {
+    // Ignore malformed JSON
+  }
+  return undefined;
+}
+
 function mapRow(r: DbExFactoryRow) {
+  const loadingSlip = parseSlipJson(r.loading_slip_json);
   return {
     id: r.id,
     entryDate: r.entry_date,
@@ -49,6 +64,7 @@ function mapRow(r: DbExFactoryRow) {
     driverName: upperStr(r.driver_name),
     mobileNumber: upperStr(r.mobile_number),
     iqamaNumber: upperStr(r.iqama_number),
+    ...(loadingSlip ? { loadingSlip } : {}),
     createdBy: r.created_by || undefined,
     updatedBy: r.updated_by || undefined,
     createdAt: r.created_at,
@@ -122,9 +138,9 @@ exFactoryRouter.post('/', requirePermission('ex_factory.create'), requireCsrf, (
 
   db.prepare(
     `INSERT INTO ex_factory_entries (
-      id, entry_date, del_note_number, customer_name, truck_number, driver_name, mobile_number, iqama_number,
+      id, entry_date, del_note_number, customer_name, truck_number, driver_name, mobile_number, iqama_number, loading_slip_json,
       created_by, updated_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)`
   ).run(
     id,
     entryDate,
@@ -202,6 +218,84 @@ exFactoryRouter.put('/:id', requirePermission('ex_factory.update'), requireCsrf,
 
   res.json({ entry: mapRow(updated) });
 });
+
+exFactoryRouter.put(
+  '/:id/loading-slip',
+  requireAnyPermission(['ex_factory.update', 'ex_factory.create']),
+  requireCsrf,
+  (req: Request, res: Response) => {
+    const id = String(req.params.id || '').trim();
+    const existing = db.prepare(`SELECT * FROM ex_factory_entries WHERE id = ?`).get(id) as DbExFactoryRow | undefined;
+    if (!existing) {
+      res.status(404).json({ error: 'Ex-Factory entry not found.' });
+      return;
+    }
+
+    const b = req.body || {};
+    const rawSlip = b.loadingSlip;
+    if (!rawSlip || typeof rawSlip !== 'object' || Array.isArray(rawSlip)) {
+      res.status(400).json({ error: 'Loading slip payload is required.' });
+      return;
+    }
+
+    const slipDelNote = upperStr(rawSlip.delNoteNumber || existing.del_note_number);
+    const slipPlace = upperStr(rawSlip.placeName);
+    if (!slipDelNote) {
+      res.status(400).json({ error: 'Delivery Note Number is required on loading slip.' });
+      return;
+    }
+    if (!slipPlace) {
+      res.status(400).json({ error: 'Destination Place is required on loading slip.' });
+      return;
+    }
+
+    const nextTruck = b.truckNumber !== undefined ? upperStr(b.truckNumber) || existing.truck_number : existing.truck_number;
+    const nextDriver = b.driverName !== undefined ? upperStr(b.driverName) : existing.driver_name;
+    const nextMobile = b.mobileNumber !== undefined ? upperStr(b.mobileNumber) : existing.mobile_number;
+
+    const normalizedSlip = normalizeLoadingSlip({
+      ...rawSlip,
+      delNoteNumber: slipDelNote,
+      placeName: slipPlace,
+      storeInchargeUserId: req.auth!.user.id,
+      storeInchargeName: req.auth!.user.fullName,
+      storeInchargeSignatureDataUrl: req.auth!.user.signatureDataUrl || '',
+    });
+
+    const now = Date.now();
+    const actor = req.auth!.user.username;
+
+    db.prepare(
+      `UPDATE ex_factory_entries
+       SET del_note_number = ?, truck_number = ?, driver_name = ?, mobile_number = ?,
+           loading_slip_json = ?, updated_by = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      slipDelNote,
+      nextTruck,
+      nextDriver,
+      nextMobile,
+      JSON.stringify(normalizedSlip),
+      actor,
+      now,
+      id
+    );
+
+    const updated = db.prepare(`SELECT * FROM ex_factory_entries WHERE id = ?`).get(id) as DbExFactoryRow;
+
+    logAudit({
+      actorUserId: req.auth!.user.id,
+      actorUsername: actor,
+      action: 'EX_FACTORY_SLIP_SAVED',
+      targetType: 'ex_factory',
+      targetId: slipDelNote,
+      details: `Saved Ex-Factory loading slip for DN ${slipDelNote} (${nextTruck}, Qty: ${normalizedSlip.totalQty || 0}, Pallets: ${normalizedSlip.totalPallets || 0})`,
+      ipAddress: getClientIp(req),
+    });
+
+    res.json({ entry: mapRow(updated) });
+  }
+);
 
 exFactoryRouter.delete('/:id', requirePermission('ex_factory.delete'), requireCsrf, (req: Request, res: Response) => {
   const id = String(req.params.id || '').trim();

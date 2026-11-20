@@ -9,15 +9,19 @@ import {
   Clock,
   Megaphone,
   Trash2,
+  Edit2,
 } from 'lucide-react';
 
 interface TicketTableProps {
   tickets: TicketRecord[];
+  gates: string[];
   onOpenLoadingSlip: (ticket: TicketRecord) => void;
   onPrintLoadingSlip: (ticket: TicketRecord) => void;
   onPrintTicket: (ticket: TicketRecord) => void;
   onOpenWhatsApp: (ticket: TicketRecord) => void;
   onStatusChange: (ticket: TicketRecord, newStatus: TruckStatus) => void;
+  onGateChange: (ticket: TicketRecord, newGate: string) => void;
+  onEditTicket: (ticket: TicketRecord) => void;
   onDeleteTicket: (ticketId: string) => void;
   canUpdate?: boolean;
   canDelete?: boolean;
@@ -26,11 +30,14 @@ interface TicketTableProps {
 
 export const TicketTable: React.FC<TicketTableProps> = ({
   tickets,
+  gates,
   onOpenLoadingSlip,
   onPrintLoadingSlip,
   onPrintTicket,
   onOpenWhatsApp,
   onStatusChange,
+  onGateChange,
+  onEditTicket,
   onDeleteTicket,
   canUpdate = true,
   canDelete = true,
@@ -170,9 +177,30 @@ export const TicketTable: React.FC<TicketTableProps> = ({
 
                   {/* Gate Number & Gate Sequence Number*/ }
                   <td className="py-3.5 px-3.5">
-                    <div className="inline-block bg-gradient-to-b from-white to-[#EFF4F9] border border-[#C5D3E2] px-2.5 py-1 rounded-lg text-[#263748] font-black text-xs shadow-xs">
-                      {t.gateNumber}
-                    </div>
+                    {canUpdate ? (
+                      <select
+                        value={t.gateNumber}
+                        onChange={(e) => {
+                          const nextGate = e.target.value;
+                          if (nextGate && nextGate !== t.gateNumber) {
+                            onGateChange(t, nextGate);
+                          }
+                        }}
+                        title="Change Loading Gate"
+                        aria-label={`Change Gate for ${t.ticketNumber}`}
+                        className="bg-gradient-to-b from-white to-[#EFF4F9] border border-[#C5D3E2] px-2 py-1 rounded-lg text-[#263748] font-black text-xs shadow-xs focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
+                      >
+                        {(gates.includes(t.gateNumber) ? gates : [t.gateNumber, ...gates]).filter(Boolean).map((g) => (
+                          <option key={g} value={g}>
+                            {g}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="inline-block bg-gradient-to-b from-white to-[#EFF4F9] border border-[#C5D3E2] px-2.5 py-1 rounded-lg text-[#263748] font-black text-xs shadow-xs">
+                        {t.gateNumber}
+                      </div>
+                    )}
                     <p className="text-[11.5px] font-bold text-[#0A6ED1] mt-1">
                       {t.status === 'under_loading'
                         ? 'In Progress'
@@ -316,6 +344,19 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                         >
                           <Printer className="w-3.5 h-3.5 text-[#F0AB00] shrink-0" />
                           <span>Print Slip</span>
+                        </button>
+                      )}
+
+                      {/* Edit Ticket & Change Gate */}
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          onClick={() => onEditTicket(t)}
+                          className="app-btn-sm bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4] shadow-xs"
+                          title="Edit Ticket Details & Gate Number"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Edit</span>
                         </button>
                       )}
 

@@ -17,6 +17,7 @@ import {
   DriverTokenStatusResponse,
   WhatsAppNotificationLog,
   WhatsAppDispatchOutcome,
+  LoadingSlipData,
 } from '../types';
 
 const SESSION_TOKEN_STORAGE_KEY = 'gp_tab_session_token';
@@ -716,5 +717,24 @@ export const ApiClient = {
     await request(`/api/ex-factory/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
+  },
+
+  async saveExFactoryLoadingSlip(
+    id: string,
+    payload: {
+      loadingSlip: LoadingSlipData;
+      truckNumber?: string;
+      driverName?: string;
+      mobileNumber?: string;
+    }
+  ): Promise<ExFactoryEntry> {
+    const res = await request<{ entry: ExFactoryEntry }>(
+      `/api/ex-factory/${encodeURIComponent(id)}/loading-slip`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.entry;
   },
 };

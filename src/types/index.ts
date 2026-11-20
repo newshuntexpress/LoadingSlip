@@ -272,6 +272,7 @@ export interface ExFactoryEntry {
   driverName: string;
   mobileNumber: string;
   iqamaNumber: string;
+  loadingSlip?: LoadingSlipData;
   createdBy?: string;
   updatedBy?: string;
   createdAt: number;

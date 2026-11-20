@@ -144,15 +144,21 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
             </span>
           </div>
           <div className="border-r border-b border-black p-1">
-            <span className="text-[9px] font-bold text-gray-600 uppercase block">Ticket No:</span>
+            <span className="text-[9px] font-bold text-gray-600 uppercase block">
+              {ticket.gateNumber === 'EX-FACTORY' ? 'Ref No:' : 'Ticket No:'}
+            </span>
             <span className="font-bold text-black">
               {ticket.ticketNumber} (#{ticket.sequenceNumber})
             </span>
           </div>
           <div className="border-b border-black p-1">
-            <span className="text-[9px] font-bold text-gray-600 uppercase block">Gate & Queue Pos:</span>
+            <span className="text-[9px] font-bold text-gray-600 uppercase block">
+              {ticket.gateNumber === 'EX-FACTORY' ? 'Dispatch Mode:' : 'Gate & Queue Pos:'}
+            </span>
             <span className="font-extrabold text-[12px] text-black">
-              {ticket.gateNumber} (Seq. #{ticket.gateSequenceNumber})
+              {ticket.gateNumber === 'EX-FACTORY'
+                ? `EX-FACTORY (#${ticket.gateSequenceNumber})`
+                : `${ticket.gateNumber} (Seq. #${ticket.gateSequenceNumber})`}
             </span>
           </div>
 
@@ -183,7 +189,9 @@ export const LoadingSlipPrintView: React.FC<LoadingSlipPrintViewProps> = ({
             </span>
           </div>
           <div className="p-1">
-            <span className="text-[9px] font-bold text-gray-600 uppercase block">Transporter:</span>
+            <span className="text-[9px] font-bold text-gray-600 uppercase block">
+              {ticket.gateNumber === 'EX-FACTORY' ? 'Customer Name:' : 'Transporter:'}
+            </span>
             <span className="font-semibold text-black truncate block">
               {ticket.transporterName || 'Self / Own'}
             </span>

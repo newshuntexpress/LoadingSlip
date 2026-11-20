@@ -12,7 +12,9 @@ import { TicketTable } from './components/TicketTable';
 import { ForkliftLoadingView } from './components/ForkliftLoadingView';
 import { LiquidMaterialStoreView } from './components/LiquidMaterialStoreView';
 import { ExFactoryView } from './components/ExFactoryView';
+import { DispatchDetailsView } from './components/DispatchDetailsView';
 import { NewTicketModal } from './components/NewTicketModal';
+import { EditTicketModal } from './components/EditTicketModal';
 import { LoadingSlipModal } from './components/LoadingSlipModal';
 import { LoadingSlipPrintView } from './components/LoadingSlipPrintView';
 import { TicketPrintView } from './components/TicketPrintView';
@@ -31,6 +33,7 @@ import {
   Plus,
   Calendar,
   FileSpreadsheet,
+  ClipboardList,
   Users,
   Settings,
   Search,
@@ -55,6 +58,7 @@ import {
   Send,
   ExternalLink,
   MoreVertical,
+  FileText,
 } from 'lucide-react';
 
 export default function App() {
@@ -89,7 +93,7 @@ export default function App() {
   const [loadingAlerts, setLoadingAlerts] = useState<LoadingAlertNotification[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(() => StorageService.getSettings());
   const [publicBranding, setPublicBranding] = useState<PublicBranding | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'forklift' | 'liquid' | 'exfactory'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'dispatch' | 'material_register' | 'forklift' | 'liquid' | 'exfactory'>('dashboard');
   const [appError, setAppError] = useState<string | null>(null);
 
   // Filters & Search
@@ -99,6 +103,7 @@ export default function App() {
 
   // Modals State
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
+  const [activeTicketForEdit, setActiveTicketForEdit] = useState<TicketRecord | null>(null);
   const [activeTicketForSlip, setActiveTicketForSlip] = useState<TicketRecord | null>(null);
   const [activeTicketForPrintSlip, setActiveTicketForPrintSlip] = useState<TicketRecord | null>(null);
   const [activeTicketForPrintTicket, setActiveTicketForPrintTicket] = useState<TicketRecord | null>(null);
@@ -214,6 +219,12 @@ export default function App() {
         !canManageDrivers &&
         !canViewReports &&
         !canManageSettings));
+
+  const canViewDispatchDetails =
+    !isForkliftOperator &&
+    !isLiquidStoreOnly &&
+    !isExFactoryOnly &&
+    (canViewTickets || canViewReports || canAccessExFactory);
 
   // Clear all sensitive state immediately upon logout or unauthorized error
   const clearSessionState = useCallback(() => {
@@ -800,7 +811,12 @@ export default function App() {
     const updates: Partial<TicketRecord> = { status: newStatus, version: ticket.version };
     if (newStatus === 'called' && !ticket.timeCalled) updates.timeCalled = getCurrentTimeString();
     if (newStatus === 'under_loading' && !ticket.timeLoadingStarted) updates.timeLoadingStarted = getCurrentTimeString();
-    if (newStatus === 'completed' && !ticket.timeCompleted) updates.timeCompleted = getCurrentTimeString();
+    if (newStatus === 'completed') {
+      if (!ticket.timeLoadingStarted) updates.timeLoadingStarted = getCurrentTimeString();
+      if (!ticket.timeCompleted) updates.timeCompleted = getCurrentTimeString();
+    } else {
+      updates.timeCompleted = '';
+    }
 
     setAppError(null);
     try {
@@ -809,6 +825,24 @@ export default function App() {
     } catch (err: any) {
       await loadData();
       setAppError(err?.message || 'Failed to update status.');
+    }
+  };
+
+  // Quick Gate change from All Tickets Ledger dropdown
+  const handleGateChange = async (ticket: TicketRecord, newGate: string) => {
+    const cleanGate = newGate.trim();
+    if (!cleanGate || cleanGate === ticket.gateNumber) return;
+
+    setAppError(null);
+    try {
+      await ApiClient.updateTicket(ticket.id, {
+        gateNumber: cleanGate,
+        version: ticket.version,
+      });
+      await loadData();
+    } catch (err: any) {
+      await loadData();
+      setAppError(err?.message || 'Failed to change gate number.');
     }
   };
 
@@ -1262,6 +1296,44 @@ export default function App() {
                     </button>
                   )}
 
+                  {canViewDispatchDetails && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('dispatch')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'dispatch'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <ClipboardList
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'dispatch' ? 'text-white' : 'text-[#0A6ED1]'
+                        }`}
+                      />
+                      <span>Dispatch Details</span>
+                    </button>
+                  )}
+
+                  {canViewDispatchDetails && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('material_register')}
+                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
+                        activeTab === 'material_register'
+                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
+                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
+                      }`}
+                    >
+                      <FileText
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          activeTab === 'material_register' ? 'text-white' : 'text-[#0A6ED1]'
+                        }`}
+                      />
+                      <span>Material Register</span>
+                    </button>
+                  )}
+
                   {canOperateForklift && (
                     <button
                       type="button"
@@ -1443,6 +1515,50 @@ export default function App() {
                         <span className="px-2 py-0.5 text-[11px] font-black rounded-full bg-black/25 text-white tabular-nums">
                           {dayTickets.length}
                         </span>
+                      </button>
+                    )}
+
+                    {canViewDispatchDetails && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('dispatch');
+                          setMobileHeaderMenuOpen(false);
+                        }}
+                        className={`app-btn w-full justify-start ${
+                          activeTab === 'dispatch'
+                            ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white border border-red-950'
+                            : 'bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]'
+                        }`}
+                      >
+                        <ClipboardList
+                          className={`w-4 h-4 shrink-0 ${
+                            activeTab === 'dispatch' ? 'text-white' : 'text-[#68AEFF]'
+                          }`}
+                        />
+                        <span>Dispatch Details</span>
+                      </button>
+                    )}
+
+                    {canViewDispatchDetails && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('material_register');
+                          setMobileHeaderMenuOpen(false);
+                        }}
+                        className={`app-btn w-full justify-start ${
+                          activeTab === 'material_register'
+                            ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white border border-red-950'
+                            : 'bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]'
+                        }`}
+                      >
+                        <FileText
+                          className={`w-4 h-4 shrink-0 ${
+                            activeTab === 'material_register' ? 'text-white' : 'text-[#68AEFF]'
+                          }`}
+                        />
+                        <span>Material Register</span>
                       </button>
                     )}
 
@@ -1858,6 +1974,8 @@ export default function App() {
         {!isForkliftOperator &&
           !isLiquidStoreOnly &&
           !isExFactoryOnly &&
+          activeTab !== 'dispatch' &&
+          activeTab !== 'material_register' &&
           activeTab !== 'forklift' &&
           activeTab !== 'liquid' &&
           activeTab !== 'exfactory' && (
@@ -1924,15 +2042,44 @@ export default function App() {
         {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewTickets && activeTab === 'list' && (
           <TicketTable
             tickets={filteredTickets}
+            gates={settings.gates}
             onOpenLoadingSlip={(t) => setActiveTicketForSlip(t)}
             onPrintLoadingSlip={(t) => setActiveTicketForPrintSlip(t)}
             onPrintTicket={(t) => setActiveTicketForPrintTicket(t)}
             onOpenWhatsApp={(t) => setActiveTicketForWhatsApp({ ticket: t, templateId: 'gate_call' })}
             onStatusChange={handleStatusChange}
+            onGateChange={handleGateChange}
+            onEditTicket={(t) => setActiveTicketForEdit(t)}
             onDeleteTicket={handleDeleteTicket}
             canUpdate={canUpdateTickets}
             canDelete={canDeleteTickets}
             canPrint={canPrintSlips}
+          />
+        )}
+
+        {/* Tab 2B: Dispatch Details Material-Wise Summary Sheet */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewDispatchDetails && activeTab === 'dispatch' && (
+          <DispatchDetailsView
+            key="dispatch-summary"
+            tickets={tickets}
+            settings={settings}
+            selectedDate={selectedDate}
+            canAccessExFactory={canAccessExFactory}
+            sectionMode="summary"
+            onRefreshTickets={() => loadData(false)}
+          />
+        )}
+
+        {/* Tab 2C: Separate Detailed Loading Slip Material Register Section */}
+        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewDispatchDetails && activeTab === 'material_register' && (
+          <DispatchDetailsView
+            key="material-register"
+            tickets={tickets}
+            settings={settings}
+            selectedDate={selectedDate}
+            canAccessExFactory={canAccessExFactory}
+            sectionMode="register"
+            onRefreshTickets={() => loadData(false)}
           />
         )}
 
@@ -1985,6 +2132,7 @@ export default function App() {
             <ExFactoryView
               currentUser={currentUser}
               drivers={StorageService.getDrivers()}
+              settings={settings}
               facilityName={settings.companyName}
               companyLogoUrl={settings.logoDataUrl}
               canCreate={canCreateExFactory}
@@ -2029,6 +2177,19 @@ export default function App() {
           settings={settings}
           onSave={handleSaveNewTicket}
           onClose={() => setShowNewTicketModal(false)}
+        />
+      )}
+
+      {/* 1b. Edit Ticket & Change Gate Modal */}
+      {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && activeTicketForEdit && canUpdateTickets && (
+        <EditTicketModal
+          ticket={activeTicketForEdit}
+          settings={settings}
+          onSave={async () => {
+            setActiveTicketForEdit(null);
+            await loadData();
+          }}
+          onClose={() => setActiveTicketForEdit(null)}
         />
       )}
 
