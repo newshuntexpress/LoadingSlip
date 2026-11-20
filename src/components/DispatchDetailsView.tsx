@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import { CompanySettings, ExFactoryEntry, TicketRecord } from '../types';
-import { ApiClient } from '../services/api';
+import { ApiClient, withBackgroundPoll } from '../services/api';
 import { formatDisplayDate, getTodayDateString } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
 import {
@@ -158,25 +158,48 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
     return () => clearTimeout(t);
   }, [toastMsg]);
 
-  const loadExFactory = useCallback(async () => {
-    if (!canAccessExFactory) {
-      setExFactoryEntries([]);
-      return;
-    }
-    setLoadingExFactory(true);
-    try {
-      const list = await ApiClient.getExFactoryEntries();
-      setExFactoryEntries(list);
-    } catch {
-      // Non-fatal if Ex-Factory endpoint is unavailable
-    } finally {
-      setLoadingExFactory(false);
-    }
-  }, [canAccessExFactory]);
+  const loadExFactory = useCallback(
+    async (isBackgroundPoll = false) => {
+      if (!canAccessExFactory) {
+        setExFactoryEntries([]);
+        return;
+      }
+      if (!isBackgroundPoll) {
+        setLoadingExFactory(true);
+      }
+      try {
+        const list = isBackgroundPoll
+          ? await withBackgroundPoll(() => ApiClient.getExFactoryEntries())
+          : await ApiClient.getExFactoryEntries();
+        setExFactoryEntries(list);
+      } catch {
+        // Non-fatal if Ex-Factory endpoint is unavailable
+      } finally {
+        if (!isBackgroundPoll) {
+          setLoadingExFactory(false);
+        }
+      }
+    },
+    [canAccessExFactory]
+  );
 
   useEffect(() => {
-    loadExFactory();
-  }, [loadExFactory]);
+    loadExFactory(false);
+    if (!canAccessExFactory) return;
+    const pollInterval = setInterval(() => {
+      loadExFactory(true);
+    }, 10000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadExFactory(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [loadExFactory, canAccessExFactory]);
 
   const handleRefreshAll = async () => {
     setRefreshing(true);

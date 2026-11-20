@@ -3344,6 +3344,79 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
 app.use('/api/liquid', liquidRouter);
 app.use('/api/ex-factory', exFactoryRouter);
 
+const SERVER_BOOT_AT = Date.now();
+let cachedBuildInfo: { buildId: string; version: string; computedAt: number } | null = null;
+
+function computeDirectorySignature(dirPath: string, hash: crypto.Hash, baseDir: string): void {
+  if (!fs.existsSync(dirPath)) return;
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.')) continue;
+      computeDirectorySignature(fullPath, hash, baseDir);
+    } else if (entry.isFile()) {
+      const stat = fs.statSync(fullPath);
+      const rel = path.relative(baseDir, fullPath);
+      hash.update(`${rel}:${Math.floor(stat.mtimeMs)}:${stat.size};`);
+    }
+  }
+}
+
+function getAppBuildInfo(): { buildId: string; version: string; serverBootAt: number } {
+  const now = Date.now();
+  if (cachedBuildInfo && now - cachedBuildInfo.computedAt < (isProduction ? 5000 : 2000)) {
+    return {
+      buildId: cachedBuildInfo.buildId,
+      version: cachedBuildInfo.version,
+      serverBootAt: SERVER_BOOT_AT,
+    };
+  }
+
+  let pkgVersion = '1.0.0';
+  const rootDir = process.cwd();
+  try {
+    const pkgRaw = fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8');
+    const pkg = JSON.parse(pkgRaw);
+    if (typeof pkg.version === 'string' && pkg.version.trim()) {
+      pkgVersion = pkg.version.trim();
+    }
+  } catch {
+    // Ignore
+  }
+
+  const hash = crypto.createHash('sha256');
+  hash.update(`v:${pkgVersion}|`);
+
+  const serverEntry = path.join(rootDir, 'server.ts');
+  if (fs.existsSync(serverEntry)) {
+    const st = fs.statSync(serverEntry);
+    hash.update(`server.ts:${Math.floor(st.mtimeMs)}:${st.size};`);
+  }
+  computeDirectorySignature(path.join(rootDir, 'server'), hash, rootDir);
+
+  const distIndex = path.join(rootDir, 'dist', 'index.html');
+  if (isProduction && fs.existsSync(distIndex)) {
+    hash.update(fs.readFileSync(distIndex));
+  } else {
+    const indexFile = path.join(rootDir, 'index.html');
+    if (fs.existsSync(indexFile)) {
+      const st = fs.statSync(indexFile);
+      hash.update(`index.html:${Math.floor(st.mtimeMs)}:${st.size};`);
+    }
+    computeDirectorySignature(path.join(rootDir, 'src'), hash, rootDir);
+  }
+
+  const buildId = hash.digest('hex').slice(0, 16);
+  cachedBuildInfo = { buildId, version: pkgVersion, computedAt: now };
+  return { buildId, version: pkgVersion, serverBootAt: SERVER_BOOT_AT };
+}
+
+// Public build/version check for automatic live client updates
+app.get('/api/app-version', (_req: Request, res: Response) => {
+  res.json({ ok: true, ...getAppBuildInfo() });
+});
+
 // Health check endpoint for Hostinger / load balancers
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true, status: 'healthy', timestamp: new Date().toISOString() });
@@ -3369,8 +3442,17 @@ async function startServer() {
   } else {
     const distDir = path.join(process.cwd(), 'dist');
     if (fs.existsSync(distDir)) {
-      app.use(express.static(distDir));
+      app.use(
+        express.static(distDir, {
+          setHeaders: (res, filePath) => {
+            if (filePath.endsWith('.html')) {
+              res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            }
+          },
+        })
+      );
       app.get('*', (_req: Request, res: Response) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.sendFile(path.join(distDir, 'index.html'));
       });
     }

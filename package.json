@@ -14,7 +14,8 @@
     "start:prod": "NODE_ENV=production node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "sync": "bash scripts/sync-github.sh"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

@@ -82,3 +82,22 @@ Verify server health at `http://localhost:3000/api/health`, then point Nginx (`p
 npm install
 npm run dev
 ```
+
+---
+
+## 5. Automatic GitHub Sync & Live Deployment (`https://loadingmanager.store/`)
+
+This repository includes an automatic CI/CD pipeline (`.github/workflows/deploy-loadingmanager.yml`) and live browser auto-reload (`/api/app-version`). Whenever code is pushed to GitHub `main` (additions, updates, or deleted files):
+
+1. GitHub Actions automatically verifies TypeScript (`npm run lint`) and builds (`npm run build`).
+2. It triggers live deployment to **`https://loadingmanager.store/`** via whichever Hostinger setup you use:
+   - **Hostinger Node.js Web App**: Enable **Auto-Deployment** in Hostinger hPanel (or add your hPanel Deploy Webhook URL as GitHub repository secret `HOSTINGER_DEPLOY_WEBHOOK_URL`).
+   - **Hostinger VPS (PM2 + Nginx)**: Add GitHub repository secrets `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, and optionally `VPS_APP_DIR` (defaults to `/var/www/gatepass`). The workflow runs `scripts/vps-deploy.sh` to mirror exact additions/removals (`git reset --hard origin/main`), rebuild `dist/`, and restart PM2 without touching `.env` or your SQLite `data/` database.
+3. Once deployed, open browser tabs on `https://loadingmanager.store/` automatically detect the new build via `/api/app-version` within 10 seconds and reload cleanly with your active session preserved.
+
+### Sync Local Changes to GitHub in One Command
+
+```bash
+npm run sync -- "Describe added/updated/removed features"
+```
+

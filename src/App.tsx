@@ -59,7 +59,20 @@ import {
   ExternalLink,
   MoreVertical,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
+
+type AppTab = 'dashboard' | 'list' | 'dispatch' | 'material_register' | 'forklift' | 'liquid' | 'exfactory';
+const ACTIVE_TAB_STORAGE_KEY = 'gp_active_tab';
+const ALLOWED_APP_TABS: ReadonlyArray<AppTab> = [
+  'dashboard',
+  'list',
+  'dispatch',
+  'material_register',
+  'forklift',
+  'liquid',
+  'exfactory',
+];
 
 export default function App() {
   // Authentication & Session State
@@ -93,7 +106,17 @@ export default function App() {
   const [loadingAlerts, setLoadingAlerts] = useState<LoadingAlertNotification[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(() => StorageService.getSettings());
   const [publicBranding, setPublicBranding] = useState<PublicBranding | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'dispatch' | 'material_register' | 'forklift' | 'liquid' | 'exfactory'>('dashboard');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    try {
+      const saved = sessionStorage.getItem(ACTIVE_TAB_STORAGE_KEY) as AppTab | null;
+      if (saved && ALLOWED_APP_TABS.includes(saved)) {
+        return saved;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return 'dashboard';
+  });
   const [appError, setAppError] = useState<string | null>(null);
 
   // Filters & Search
@@ -135,6 +158,9 @@ export default function App() {
   } | null>(null);
 
   const migratedOnceRef = useRef(false);
+  const initialBuildIdRef = useRef<string | null>(null);
+  const versionCheckInFlightRef = useRef(false);
+  const [pendingAppUpdate, setPendingAppUpdate] = useState<{ version: string; buildId: string } | null>(null);
 
   const isAdmin = currentUser?.roleName === 'admin';
   const isForkliftOperator = currentUser?.roleName === 'forklift_operator';
@@ -233,6 +259,11 @@ export default function App() {
     StorageService.clearCache();
     setCurrentUser(null);
     setActiveTab('dashboard');
+    try {
+      sessionStorage.removeItem(ACTIVE_TAB_STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
     setTickets([]);
     setLoadingAlerts([]);
     setShowNewTicketModal(false);
@@ -478,7 +509,7 @@ export default function App() {
 
     const pollInterval = setInterval(() => {
       loadData(true);
-    }, 15000);
+    }, 10000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -493,6 +524,93 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [currentUser, isLiquidStoreOnly, isExFactoryOnly, loadData]);
+
+  // Persist current section tab across automatic live update reloads
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ACTIVE_TAB_STORAGE_KEY, activeTab);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [activeTab]);
+
+  // Live App Version Watcher: automatically detects newly deployed updates / features
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAppVersion = async () => {
+      if (cancelled || versionCheckInFlightRef.current) return;
+      versionCheckInFlightRef.current = true;
+      try {
+        const res = await fetch('/api/app-version', {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const nextBuildId = typeof data?.buildId === 'string' ? data.buildId : '';
+        const nextVersion = typeof data?.version === 'string' ? data.version : '1.0.0';
+        if (!nextBuildId || cancelled) return;
+
+        if (!initialBuildIdRef.current) {
+          initialBuildIdRef.current = nextBuildId;
+          return;
+        }
+
+        if (nextBuildId !== initialBuildIdRef.current) {
+          setPendingAppUpdate((prev) =>
+            prev && prev.buildId === nextBuildId ? prev : { version: nextVersion, buildId: nextBuildId }
+          );
+        }
+      } catch {
+        // Ignore transient network errors during background version checks
+      } finally {
+        versionCheckInFlightRef.current = false;
+      }
+    };
+
+    checkAppVersion();
+    const timer = setInterval(checkAppVersion, 10000);
+    const onFocus = () => {
+      checkAppVersion();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkAppVersion();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  const hasBlockingEditorOpen = Boolean(
+    showNewTicketModal ||
+      activeTicketForEdit ||
+      activeTicketForSlip ||
+      showSettingsModal ||
+      showWhatsAppTemplatesModal ||
+      showDriverMasterModal ||
+      showAdminModal ||
+      showChangePasswordModal ||
+      activeTicketForWhatsApp
+  );
+
+  // Automatically reload live app cleanly as soon as no editor modal is actively open
+  useEffect(() => {
+    if (!pendingAppUpdate || hasBlockingEditorOpen) return;
+    const reloadTimer = setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+    return () => clearTimeout(reloadTimer);
+  }, [pendingAppUpdate, hasBlockingEditorOpen]);
 
   // Auto-Logout Idle Timeout applies ONLY to non-admin users (Admins stay signed in)
   useEffect(() => {
@@ -582,15 +700,41 @@ export default function App() {
     }
   };
 
+  const updateBanner = pendingAppUpdate ? (
+    <div className="print:hidden fixed top-2 left-1/2 -translate-x-1/2 z-[100] w-[min(94vw,640px)] bg-gradient-to-r from-[#0A6ED1] via-[#085CAF] to-[#0E7490] text-white rounded-xl shadow-2xl border border-[#7CC0FF]/60 px-3.5 py-2.5 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <RefreshCw className={`w-4 h-4 text-[#F0AB00] shrink-0 ${!hasBlockingEditorOpen ? 'animate-spin' : ''}`} />
+        <p className="text-xs font-bold leading-snug">
+          {hasBlockingEditorOpen
+            ? 'New app update available — will auto-update as soon as you finish editing.'
+            : 'New app update detected — reloading automatically to apply latest features...'}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="shrink-0 bg-[#F0AB00] hover:bg-[#FFC229] text-[#1C2833] font-black text-xs px-3 py-1.5 rounded-lg shadow cursor-pointer transition active:scale-95 whitespace-nowrap"
+      >
+        Update Now
+      </button>
+    </div>
+  ) : null;
+
   // Public tokenized Driver Live Loading Status link from WhatsApp (no login required)
   if (driverStatusToken) {
-    return <DriverTokenStatusPage token={driverStatusToken} initialBranding={publicBranding} />;
+    return (
+      <>
+        {updateBanner}
+        <DriverTokenStatusPage token={driverStatusToken} initialBranding={publicBranding} />
+      </>
+    );
   }
 
   // Show boot spinner while checking session cookie
   if (authLoading) {
     return (
       <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center text-white gap-3 p-4">
+        {updateBanner}
         <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
         <p className="text-sm font-semibold text-neutral-300">Verifying secure session...</p>
       </div>
@@ -601,21 +745,26 @@ export default function App() {
   if (!currentUser) {
     if (showDriverStatusView && !needsSetup) {
       return (
-        <DriverStatusView
-          branding={publicBranding}
-          backLabel="Staff Login"
-          onBack={() => {
-            setShowDriverStatusView(false);
-            if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
-              window.history.replaceState(null, '', '/');
-            }
-          }}
-        />
+        <>
+          {updateBanner}
+          <DriverStatusView
+            branding={publicBranding}
+            backLabel="Staff Login"
+            onBack={() => {
+              setShowDriverStatusView(false);
+              if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
+                window.history.replaceState(null, '', '/');
+              }
+            }}
+          />
+        </>
       );
     }
 
     return (
-      <LoginView
+      <>
+        {updateBanner}
+        <LoginView
         needsSetup={needsSetup}
         branding={publicBranding}
         onOpenDriverStatus={() => {
@@ -660,6 +809,7 @@ export default function App() {
           }
         }}
       />
+      </>
     );
   }
 
@@ -713,20 +863,23 @@ export default function App() {
   // Optional Driver Live Loading Status screen preview for dispatchers/admins
   if (showDriverStatusView && !isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly) {
     return (
-      <DriverStatusView
-        branding={{
-          companyName: settings.companyName,
-          companySubtitle: settings.companySubtitle,
-          logoDataUrl: settings.logoDataUrl,
-        }}
-        backLabel="Back to Dispatch"
-        onBack={() => {
-          setShowDriverStatusView(false);
-          if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
-            window.history.replaceState(null, '', '/');
-          }
-        }}
-      />
+      <>
+        {updateBanner}
+        <DriverStatusView
+          branding={{
+            companyName: settings.companyName,
+            companySubtitle: settings.companySubtitle,
+            logoDataUrl: settings.logoDataUrl,
+          }}
+          backLabel="Back to Dispatch"
+          onBack={() => {
+            setShowDriverStatusView(false);
+            if (window.location.hash.toLowerCase().startsWith('#driver-status') || window.location.pathname === '/driver-status') {
+              window.history.replaceState(null, '', '/');
+            }
+          }}
+        />
+      </>
     );
   }
 
@@ -990,6 +1143,10 @@ export default function App() {
   const activeSectionLabel =
     activeTab === 'list'
       ? `All Tickets Ledger (${dayTickets.length})`
+      : activeTab === 'dispatch'
+      ? 'Dispatch Details'
+      : activeTab === 'material_register'
+      ? 'Material Register'
       : activeTab === 'forklift'
       ? `Forklift Loading (${pendingForkliftCount})`
       : activeTab === 'liquid'
@@ -1000,6 +1157,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-[#1C2833] font-sans flex flex-col">
+      {updateBanner}
       {/* Top 3D Beveled Command Header */}
       <header className="print:hidden bg-gradient-to-b from-[#3E556D] via-[#354A5F] to-[#263748] text-white sticky top-0 z-40 border-b border-[#1A2836] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_0_#1D2B3A,0_10px_20px_-6px_rgba(15,23,42,0.3)]">
         <div className="h-1 w-full bg-gradient-to-r from-[#F0AB00] via-[#0A6ED1] to-[#107E3E]" />

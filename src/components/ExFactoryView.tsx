@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import { AuthUser, CompanySettings, DriverMasterRecord, ExFactoryEntry, TicketRecord } from '../types';
-import { ApiClient } from '../services/api';
+import { ApiClient, withBackgroundPoll } from '../services/api';
 import { formatDisplayDate, getTodayDateString } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
 import { LoadingSlipModal } from './LoadingSlipModal';
@@ -219,19 +219,41 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     return () => clearTimeout(t);
   }, [toast]);
 
-  const loadEntries = useCallback(async () => {
-    try {
-      const list = await ApiClient.getExFactoryEntries();
-      setEntries(list);
-    } catch (err: any) {
-      showToast('error', err?.message || 'Failed to load Ex-Factory entries.');
-    } finally {
-      setLoading(false);
-    }
-  }, [showToast]);
+  const loadEntries = useCallback(
+    async (isBackgroundPoll = false) => {
+      try {
+        const list = isBackgroundPoll
+          ? await withBackgroundPoll(() => ApiClient.getExFactoryEntries())
+          : await ApiClient.getExFactoryEntries();
+        setEntries(list);
+      } catch (err: any) {
+        if (!isBackgroundPoll) {
+          showToast('error', err?.message || 'Failed to load Ex-Factory entries.');
+        }
+      } finally {
+        if (!isBackgroundPoll) {
+          setLoading(false);
+        }
+      }
+    },
+    [showToast]
+  );
 
   useEffect(() => {
-    loadEntries();
+    loadEntries(false);
+    const pollInterval = setInterval(() => {
+      loadEntries(true);
+    }, 10000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadEntries(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [loadEntries]);
 
   const resetForm = useCallback(() => {
@@ -851,7 +873,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
 
           <button
             type="button"
-            onClick={loadEntries}
+            onClick={() => loadEntries(false)}
             className="app-btn bg-white hover:bg-[#EFF4F9] text-[#354A5F] border border-[#BCC8D4]"
             title="Refresh records"
           >
