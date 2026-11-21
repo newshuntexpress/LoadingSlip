@@ -17,6 +17,8 @@ import {
   FORKLIFT_ALLOWED_PERMISSION_KEYS,
   LIQUID_STORE_ALLOWED_PERMISSION_KEYS,
   EX_FACTORY_ALLOWED_PERMISSION_KEYS,
+  USER_ASSIGNABLE_PERMISSION_KEYS,
+  VIEW_ONLY_ALLOWED_PERMISSION_KEYS,
 } from './server/db.ts';
 import {
   DUMMY_BCRYPT_HASH,
@@ -41,6 +43,13 @@ import {
 } from './server/security.ts';
 import { liquidRouter } from './server/liquid.ts';
 import { exFactoryRouter } from './server/exFactory.ts';
+import {
+  materialsRouter,
+  normalizeMaterialMasterRow,
+  normalizePackType,
+  syncMissingMaterialsFromLoadingSlip,
+  type DbMaterialMasterRow,
+} from './server/materials.ts';
 import {
   upperStr,
   normalizeTicketRecord,
@@ -1017,6 +1026,10 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
   const targetRoleName =
     roleName === 'admin'
       ? 'admin'
+      : roleName === 'mmd_manager'
+      ? 'mmd_manager'
+      : roleName === 'view_only'
+      ? 'view_only'
       : roleName === 'forklift_operator'
       ? 'forklift_operator'
       : roleName === 'liquid_store_operator'
@@ -1053,25 +1066,11 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
       now
     );
 
-    if (targetRoleName === 'user' && Array.isArray(permissions)) {
+    if ((targetRoleName === 'user' || targetRoleName === 'mmd_manager') && Array.isArray(permissions)) {
       const insertPerm = db.prepare(
         `INSERT OR REPLACE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
       );
-      const validUserPerms = new Set([
-        'tickets.view',
-        'tickets.create',
-        'tickets.update',
-        'forklift.operate',
-        'tickets.delete',
-        'slips.print',
-        'drivers.manage',
-        'reports.view',
-        'liquid.store',
-        'ex_factory.view',
-        'ex_factory.create',
-        'ex_factory.update',
-        'ex_factory.delete',
-      ]);
+      const validUserPerms = new Set(USER_ASSIGNABLE_PERMISSION_KEYS);
       const cleanPerms = permissions.filter(
         (permKey): permKey is string => typeof permKey === 'string' && validUserPerms.has(permKey)
       );
@@ -1079,6 +1078,22 @@ app.post('/api/admin/users', requireAuth, requirePasswordChanged, requireCsrf, r
         insertPerm.run(userId, permKey);
       }
       if (cleanPerms.length === 0) {
+        db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
+          userId
+        );
+      }
+    } else if (targetRoleName === 'view_only' && Array.isArray(permissions)) {
+      const insertPerm = db.prepare(
+        `INSERT OR REPLACE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
+      );
+      const validViewOnlyPerms = new Set(VIEW_ONLY_ALLOWED_PERMISSION_KEYS);
+      const cleanViewOnlyPerms = permissions.filter(
+        (permKey): permKey is string => typeof permKey === 'string' && validViewOnlyPerms.has(permKey)
+      );
+      for (const permKey of cleanViewOnlyPerms) {
+        insertPerm.run(userId, permKey);
+      }
+      if (cleanViewOnlyPerms.length === 0) {
         db.prepare(`INSERT INTO user_permissions (user_id, permission_key, granted) VALUES (?, '__none__', 0)`).run(
           userId
         );
@@ -1186,6 +1201,8 @@ app.patch('/api/admin/users/:id', requireAuth, requirePasswordChanged, requireCs
   const nextRoleName =
     roleName === 'admin' ||
     roleName === 'user' ||
+    roleName === 'mmd_manager' ||
+    roleName === 'view_only' ||
     roleName === 'forklift_operator' ||
     roleName === 'liquid_store_operator' ||
     roleName === 'ex_factory_operator'
@@ -1359,21 +1376,9 @@ app.put(
         ? new Set(LIQUID_STORE_ALLOWED_PERMISSION_KEYS)
         : target.roleName === 'ex_factory_operator'
         ? new Set(EX_FACTORY_ALLOWED_PERMISSION_KEYS)
-        : new Set([
-            'tickets.view',
-            'tickets.create',
-            'tickets.update',
-            'forklift.operate',
-            'tickets.delete',
-            'slips.print',
-            'drivers.manage',
-            'reports.view',
-            'liquid.store',
-            'ex_factory.view',
-            'ex_factory.create',
-            'ex_factory.update',
-            'ex_factory.delete',
-          ]);
+        : target.roleName === 'view_only'
+        ? new Set(VIEW_ONLY_ALLOWED_PERMISSION_KEYS)
+        : new Set(USER_ASSIGNABLE_PERMISSION_KEYS);
 
     const cleanPerms = permissions.filter((p): p is string => typeof p === 'string' && validAllowedPerms.has(p));
 
@@ -1813,7 +1818,7 @@ app.get(
   '/api/tickets',
   requireAuth,
   requirePasswordChanged,
-  requirePermission('tickets.view'),
+  requireAnyPermission(['tickets.view', 'dispatch.view', 'material_register.view']),
   (_req: Request, res: Response) => {
     processAutoLoadingTransitions();
 
@@ -2101,6 +2106,16 @@ app.patch(
         upsertDriverMasterInternal(merged);
       }
 
+      const autoSavedMaterials =
+        cleanUpdates.loadingSlip && merged.loadingSlip?.items
+          ? syncMissingMaterialsFromLoadingSlip(
+              merged.loadingSlip.items,
+              req.auth!.user.username,
+              req.auth!.user.id,
+              getClientIp(req)
+            ).addedMaterials
+          : [];
+
       const refreshedRow = db.prepare(`SELECT data_json FROM tickets WHERE id = ?`).get(ticketId) as { data_json: string };
       const driverStatusToken = getDriverSlipToken(ticketId);
       const finalTicket = normalizeTicketRecord({
@@ -2115,6 +2130,7 @@ app.patch(
         ticket: finalTicket,
         slipSaved: Boolean(cleanUpdates.loadingSlip),
         isNewLoadingSlip,
+        autoSavedMaterials,
       };
     })();
 
@@ -2172,6 +2188,9 @@ app.patch(
     res.json({
       ticket: result.ticket,
       ...(whatsappNotification ? { whatsappNotification } : {}),
+      ...(result.autoSavedMaterials && result.autoSavedMaterials.length > 0
+        ? { autoSavedMaterials: result.autoSavedMaterials }
+        : {}),
     });
   }
 );
@@ -3267,9 +3286,14 @@ app.get(
       | { value_json: string }
       | undefined;
 
+    const materialMaster = (
+      db.prepare(`SELECT * FROM material_master ORDER BY material_name COLLATE NOCASE ASC`).all() as DbMaterialMasterRow[]
+    ).map(normalizeMaterialMasterRow);
+
     res.json({
       tickets,
       drivers,
+      materialMaster,
       settings: activeRow ? normalizeSettingsRecord(JSON.parse(activeRow.value_json)) : undefined,
       defaultSettings: defaultRow ? normalizeSettingsRecord(JSON.parse(defaultRow.value_json)) : undefined,
       exportedAt: new Date().toISOString(),
@@ -3278,7 +3302,7 @@ app.get(
 );
 
 app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf, requireAdmin, (req: Request, res: Response) => {
-  const { tickets, drivers, settings, defaultSettings } = req.body || {};
+  const { tickets, drivers, materialMaster, settings, defaultSettings } = req.body || {};
   const now = Date.now();
 
   db.transaction(() => {
@@ -3317,6 +3341,31 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
         }
       }
     }
+    if (Array.isArray(materialMaster)) {
+      db.prepare(`DELETE FROM material_master`).run();
+      const insertMat = db.prepare(
+        `INSERT OR REPLACE INTO material_master (id, material_name, pack_type, pallet_ratio, remarks, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const m of materialMaster) {
+        const name = upperStr(m?.materialName).slice(0, 120);
+        if (m && name) {
+          const pack = normalizePackType(m.packType) || 'Rolls';
+          const ratio = Math.max(1, Math.min(10000, Math.round(Number(m.palletRatio) || 23)));
+          insertMat.run(
+            String(m.id || `mat-${now}-${crypto.randomBytes(3).toString('hex')}`),
+            name,
+            pack,
+            ratio,
+            upperStr(m.remarks).slice(0, 160),
+            String(m.createdBy || req.auth!.user.username),
+            req.auth!.user.username,
+            Number(m.createdAt) || now,
+            Number(m.updatedAt) || now
+          );
+        }
+      }
+    }
     if (settings && typeof settings === 'object') {
       db.prepare(
         `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`
@@ -3343,6 +3392,7 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
 
 app.use('/api/liquid', liquidRouter);
 app.use('/api/ex-factory', exFactoryRouter);
+app.use('/api/materials', materialsRouter);
 
 const SERVER_BOOT_AT = Date.now();
 let cachedBuildInfo: { buildId: string; version: string; computedAt: number } | null = null;

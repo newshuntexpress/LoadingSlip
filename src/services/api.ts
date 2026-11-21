@@ -1,6 +1,8 @@
 import {
   TicketRecord,
+  TruckLoadingType,
   DriverMasterRecord,
+  MaterialMasterRecord,
   CompanySettings,
   PublicBranding,
   AuthUser,
@@ -361,8 +363,16 @@ export const ApiClient = {
   async updateTicketWithNotification(
     id: string,
     updates: Partial<TicketRecord>
-  ): Promise<{ ticket: TicketRecord; whatsappNotification?: WhatsAppDispatchOutcome }> {
-    return request<{ ticket: TicketRecord; whatsappNotification?: WhatsAppDispatchOutcome }>(
+  ): Promise<{
+    ticket: TicketRecord;
+    whatsappNotification?: WhatsAppDispatchOutcome;
+    autoSavedMaterials?: MaterialMasterRecord[];
+  }> {
+    return request<{
+      ticket: TicketRecord;
+      whatsappNotification?: WhatsAppDispatchOutcome;
+      autoSavedMaterials?: MaterialMasterRecord[];
+    }>(
       `/api/tickets/${encodeURIComponent(id)}`,
       {
         method: 'PATCH',
@@ -682,6 +692,7 @@ export const ApiClient = {
     entryDate?: string;
     delNoteNumber: string;
     customerName: string;
+    loadingType?: TruckLoadingType;
     truckNumber: string;
     driverName?: string;
     mobileNumber?: string;
@@ -700,6 +711,7 @@ export const ApiClient = {
       entryDate?: string;
       delNoteNumber: string;
       customerName: string;
+      loadingType?: TruckLoadingType;
       truckNumber: string;
       driverName?: string;
       mobileNumber?: string;
@@ -719,6 +731,24 @@ export const ApiClient = {
     });
   },
 
+  async saveExFactoryLoadingSlipWithResult(
+    id: string,
+    payload: {
+      loadingSlip: LoadingSlipData;
+      truckNumber?: string;
+      driverName?: string;
+      mobileNumber?: string;
+    }
+  ): Promise<{ entry: ExFactoryEntry; autoSavedMaterials?: MaterialMasterRecord[] }> {
+    return request<{ entry: ExFactoryEntry; autoSavedMaterials?: MaterialMasterRecord[] }>(
+      `/api/ex-factory/${encodeURIComponent(id)}/loading-slip`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
   async saveExFactoryLoadingSlip(
     id: string,
     payload: {
@@ -728,13 +758,69 @@ export const ApiClient = {
       mobileNumber?: string;
     }
   ): Promise<ExFactoryEntry> {
-    const res = await request<{ entry: ExFactoryEntry }>(
-      `/api/ex-factory/${encodeURIComponent(id)}/loading-slip`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      }
-    );
+    const res = await this.saveExFactoryLoadingSlipWithResult(id, payload);
     return res.entry;
+  },
+
+  // Material Master
+  async getMaterials(): Promise<MaterialMasterRecord[]> {
+    const res = await request<{ materials: MaterialMasterRecord[] }>('/api/materials');
+    return res.materials;
+  },
+
+  async createMaterial(payload: {
+    materialName: string;
+    packType: string;
+    palletRatio: number;
+    remarks?: string;
+  }): Promise<MaterialMasterRecord> {
+    const res = await request<{ material: MaterialMasterRecord }>('/api/materials', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return res.material;
+  },
+
+  async updateMaterial(
+    id: string,
+    payload: {
+      materialName: string;
+      packType: string;
+      palletRatio: number;
+      remarks?: string;
+    }
+  ): Promise<MaterialMasterRecord> {
+    const res = await request<{ material: MaterialMasterRecord }>(`/api/materials/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return res.material;
+  },
+
+  async deleteMaterial(id: string): Promise<void> {
+    await request(`/api/materials/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async importMaterials(payload: {
+    items: Array<{
+      materialName: string;
+      packType: string;
+      palletRatio: number;
+      remarks?: string;
+    }>;
+    mode?: 'upsert' | 'skip_existing';
+  }): Promise<{
+    insertedCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    errors: string[];
+    materials: MaterialMasterRecord[];
+  }> {
+    return request('/api/materials/import', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 };

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import { CompanySettings, ExFactoryEntry, TicketRecord } from '../types';
+import { CompanySettings, ExFactoryEntry, TicketRecord, TruckLoadingType } from '../types';
 import { ApiClient, withBackgroundPoll } from '../services/api';
 import { formatDisplayDate, getTodayDateString } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
+import { resolveLoadingType } from '../utils/loadingType';
 import {
   ClipboardList,
   Calendar,
@@ -19,6 +20,8 @@ import {
   Boxes,
   X,
   Truck,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 
 interface DispatchDetailsViewProps {
@@ -39,6 +42,7 @@ interface DispatchMaterialRow {
   delNoteNumber: string;
   truckNumber: string;
   destination: string;
+  loadingType: TruckLoadingType;
   status: string;
   materialDescription: string;
   materialKey: string;
@@ -141,6 +145,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
   const [toDate, setToDate] = useState<string>(initialDate);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('ALL');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'MAIN' | 'EX_FACTORY'>('ALL');
+  const [loadingTypeFilter, setLoadingTypeFilter] = useState<'ALL' | 'local' | 'export'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [ratioOverrides, setRatioOverrides] = useState<Record<string, number>>({});
 
@@ -246,6 +251,12 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
           delNoteNumber: (slip.delNoteNumber || t.delNoteNumber || '-').trim().toUpperCase(),
           truckNumber: (t.truckNumber || '-').trim().toUpperCase(),
           destination: (slip.placeName || t.destinationPlace || '-').trim(),
+          loadingType: resolveLoadingType({
+            loadingType: t.loadingType,
+            destinationPlace: t.destinationPlace,
+            placeName: slip.placeName,
+            remarks: t.remarks,
+          }),
           status: t.status,
           materialDescription: cleanDesc,
           materialKey: cleanDesc.toUpperCase(),
@@ -289,6 +300,11 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
             delNoteNumber: (slip.delNoteNumber || entry.delNoteNumber || '-').trim().toUpperCase(),
             truckNumber: (entry.truckNumber || '-').trim().toUpperCase(),
             destination: (slip.placeName || entry.customerName || 'EX-FACTORY').trim(),
+            loadingType: resolveLoadingType({
+              loadingType: entry.loadingType,
+              destinationPlace: slip.placeName,
+              placeName: entry.customerName,
+            }),
             status: 'ex_factory',
             materialDescription: cleanDesc,
             materialKey: cleanDesc.toUpperCase(),
@@ -336,6 +352,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
       }
       if (sourceFilter === 'MAIN' && row.source !== 'Main Gate') return false;
       if (sourceFilter === 'EX_FACTORY' && row.source !== 'Ex-Factory') return false;
+      if (loadingTypeFilter !== 'ALL' && row.loadingType !== loadingTypeFilter) return false;
 
       if (q) {
         const hay = [
@@ -343,6 +360,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
           row.delNoteNumber,
           row.truckNumber,
           row.destination,
+          row.loadingType,
           row.refNumber,
           row.gateLabel,
           row.pack,
@@ -355,7 +373,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
 
       return true;
     });
-  }, [allMaterialRows, dateFilterMode, todayDate, fromDate, toDate, sourceFilter, searchQuery]);
+  }, [allMaterialRows, dateFilterMode, todayDate, fromDate, toDate, sourceFilter, loadingTypeFilter, searchQuery]);
 
   // Step 2 filter: + Material dropdown filter
   const filteredRows = useMemo(() => {
@@ -451,9 +469,20 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
 
   // Grand totals derived from materialSummary (so Pallets & Loose Rolls match Total Qty ÷ Ratio)
   const grandTotals = useMemo(() => {
-    const slipSet = new Set<string>();
+    const slipSet = new Map<string, TruckLoadingType>();
     for (const r of filteredRows) {
-      slipSet.add(`${r.source}_${r.delNoteNumber}_${r.truckNumber}_${r.date}`);
+      if (r.status === 'cancelled') continue;
+      const key = `${r.source}_${r.delNoteNumber}_${r.truckNumber}_${r.date}`;
+      if (!slipSet.has(key)) {
+        slipSet.set(key, r.loadingType);
+      }
+    }
+
+    let localTrucks = 0;
+    let exportTrucks = 0;
+    for (const t of slipSet.values()) {
+      if (t === 'export') exportTrucks += 1;
+      else localTrucks += 1;
     }
 
     let totalQty = 0;
@@ -469,6 +498,8 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
       materialCount: materialSummary.length,
       lineCount: filteredRows.length,
       slipCount: slipSet.size,
+      localTrucks,
+      exportTrucks,
       totalQty,
       totalPallets,
       totalLooseRolls,
@@ -764,23 +795,25 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
     const margin = 10;
 
     const drawBanner = (title: string, subtitle: string) => {
-      doc.setFillColor(53, 74, 95);
-      doc.rect(margin, 8, pageW - margin * 2, 16, 'F');
-      doc.setFillColor(240, 171, 0);
-      doc.rect(margin, 24, pageW - margin * 2, 1.2, 'F');
-      const hasLogo = drawPdfLogo(doc, settings.logoDataUrl, margin + 3, 9.5, 13, 13, true);
+      // Light SAP Fiori low-ink header banner (saves printer ink/toner)
+      doc.setFillColor(244, 248, 252);
+      doc.setDrawColor(198, 212, 227);
+      doc.rect(margin, 8, pageW - margin * 2, 16, 'FD');
+      doc.setFillColor(10, 110, 209);
+      doc.rect(margin, 23.2, pageW - margin * 2, 1, 'F');
+      const hasLogo = drawPdfLogo(doc, settings.logoDataUrl, margin + 3, 9.5, 13, 13, false);
       const titleX = hasLogo ? margin + 19 : margin + 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
-      doc.setTextColor(255, 255, 255);
+      doc.setTextColor(10, 110, 209);
       doc.text(title, titleX, 15.5);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.setTextColor(220, 232, 244);
+      doc.setTextColor(53, 74, 95);
       doc.text(
         `${settings.companyName}  |  ${subtitle}  |  Date Filter: ${activeFilterDateLabel}`,
         titleX,
-        21
+        20.8
       );
       return 29;
     };
@@ -878,7 +911,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
     // Summary Mode: Material-Wise Dispatch Totals
     let y = drawBanner(
       'DISPATCH DETAILS — MATERIAL-WISE DISPATCH SUMMARY',
-      'Material-Wise Dispatch Totals (Total Qty / Pallet Ratio)'
+      `Trucks: ${grandTotals.slipCount} (Local: ${grandTotals.localTrucks} | Export: ${grandTotals.exportTrucks})`
     );
     const sumCols = [
       { label: 'Sr.', w: 11 },
@@ -1144,6 +1177,18 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
               </select>
             )}
 
+            {/* Local / Export Filter */}
+            <select
+              value={loadingTypeFilter}
+              onChange={(e) => setLoadingTypeFilter(e.target.value as 'ALL' | 'local' | 'export')}
+              aria-label="Filter by Loading Type (Local / Export)"
+              className="inset-3d h-9 text-xs font-bold px-2.5 rounded-lg border border-[#C2D0DF] bg-[#F4F8FC] text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1] cursor-pointer"
+            >
+              <option value="ALL">All Loading Types (Local + Export)</option>
+              <option value="local">Local Only</option>
+              <option value="export">Export Only</option>
+            </select>
+
             {/* Text Search */}
             <div className="relative min-w-[200px] sm:w-56">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#5B738B] pointer-events-none" />
@@ -1165,7 +1210,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
               )}
             </div>
 
-            {(selectedMaterial !== 'ALL' || sourceFilter !== 'ALL' || searchQuery || dateFilterMode !== 'TODAY') && (
+            {(selectedMaterial !== 'ALL' || sourceFilter !== 'ALL' || loadingTypeFilter !== 'ALL' || searchQuery || dateFilterMode !== 'TODAY') && (
               <button
                 type="button"
                 onClick={() => {
@@ -1174,6 +1219,7 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
                   setToDate(initialDate);
                   setSelectedMaterial('ALL');
                   setSourceFilter('ALL');
+                  setLoadingTypeFilter('ALL');
                   setSearchQuery('');
                 }}
                 className="app-btn-sm bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-300"
@@ -1182,6 +1228,54 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Total Truck Loading Breakdown: Local & Export */}
+      <div className="surface-3d rounded-2xl p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#D9E3EE] gap-3 sm:gap-0">
+        <div className="flex items-center justify-between sm:pr-5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-[#EFF4F9] text-[#354A5F] border border-[#C6D4E3]">
+              <Truck className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-[#354A5F] uppercase tracking-wider block">
+                Total Truck Loading
+              </span>
+              <span className="text-[11px] text-[#5B738B]">Slips in selected range</span>
+            </div>
+          </div>
+          <span className="text-2xl font-black text-[#1C2833] tabular-nums">{grandTotals.slipCount}</span>
+        </div>
+
+        <div className="flex items-center justify-between sm:px-5 pt-2 sm:pt-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider block">
+                Local Trucks
+              </span>
+              <span className="text-[11px] text-[#5B738B]">Domestic dispatch</span>
+            </div>
+          </div>
+          <span className="text-2xl font-black text-emerald-700 tabular-nums">{grandTotals.localTrucks}</span>
+        </div>
+
+        <div className="flex items-center justify-between sm:pl-5 pt-2 sm:pt-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider block">
+                Export Trucks
+              </span>
+              <span className="text-[11px] text-[#5B738B]">International dispatch</span>
+            </div>
+          </div>
+          <span className="text-2xl font-black text-indigo-700 tabular-nums">{grandTotals.exportTrucks}</span>
         </div>
       </div>
 
@@ -1262,14 +1356,14 @@ export const DispatchDetailsView: React.FC<DispatchDetailsViewProps> = ({
       {/* Sheet 1: Material-Wise Total Qty ÷ Pallet Ratio = Pallets & Loose Rolls */}
       {!isRegisterMode && materialSummary.length > 0 && (
         <div className="surface-3d rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 bg-gradient-to-r from-[#354A5F] to-[#263748] text-white flex flex-wrap items-center justify-between gap-2">
+          <div className="px-4 py-3 bg-[#F4F8FC] border-b-2 border-[#0A6ED1] text-[#1C2833] flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#F0AB00]" />
-              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wide">
+              <Layers className="w-4 h-4 text-[#0A6ED1]" />
+              <h3 className="text-xs sm:text-sm font-black text-[#0A6ED1] uppercase tracking-wide">
                 Material-Wise Dispatch Summary ({activeFilterDateLabel})
               </h3>
             </div>
-            <span className="text-[11px] font-semibold text-[#D5E2F0]">
+            <span className="text-[11px] font-semibold text-[#5B738B]">
               Total Qty ÷ Pallet Ratio = Total Pallets &amp; Loose Rolls (click row to filter material)
             </span>
           </div>

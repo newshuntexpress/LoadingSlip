@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { TicketRecord, CompanySettings } from '../types';
+import { TicketRecord, TruckLoadingType, CompanySettings } from '../types';
 import { StorageService } from '../services/storage';
 import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
+import { resolveLoadingType, inferLoadingTypeFromDestination } from '../utils/loadingType';
 import {
   Edit2,
   Truck,
@@ -16,6 +17,7 @@ import {
   Save,
   X,
   FileText,
+  Globe,
 } from 'lucide-react';
 
 interface EditTicketModalProps {
@@ -37,6 +39,8 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
   const [driverPhone, setDriverPhone] = useState(() => formatSaudiPhoneNumber(ticket.driverPhone || ''));
   const [iqamaNumber, setIqamaNumber] = useState(ticket.iqamaNumber || '');
   const [destinationPlace, setDestinationPlace] = useState(ticket.destinationPlace || '');
+  const [loadingType, setLoadingType] = useState<TruckLoadingType>(() => resolveLoadingType(ticket));
+  const [loadingTypeManual, setLoadingTypeManual] = useState(() => Boolean(ticket.loadingType));
   const [transporterName, setTransporterName] = useState(ticket.transporterName || '');
   const [selectedGate, setSelectedGate] = useState(ticket.gateNumber || settings.gates[0] || 'Gate 1');
   const [priority, setPriority] = useState<'normal' | 'urgent'>(ticket.priority || 'normal');
@@ -98,6 +102,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
         driverPhone: formatSaudiPhoneNumber(driverPhone),
         iqamaNumber: iqamaNumber.trim().toUpperCase(),
         destinationPlace: destinationPlace.trim().toUpperCase(),
+        loadingType,
         transporterName: transporterName.trim().toUpperCase(),
         gateNumber: selectedGate.trim(),
         priority,
@@ -267,8 +272,8 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
             </div>
           </div>
 
-          {/* Destination & Transporter */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Destination, Loading Type (Local / Export) & Transporter */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-bold text-neutral-700 block mb-1">
                 Destination Place / Unloading Point
@@ -280,9 +285,54 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
                 <input
                   type="text"
                   value={destinationPlace}
-                  onChange={(e) => setDestinationPlace(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDestinationPlace(val);
+                    if (!loadingTypeManual) {
+                      const inferred = inferLoadingTypeFromDestination(val);
+                      if (inferred) setLoadingType(inferred);
+                    }
+                  }}
                   className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-neutral-700 block mb-1">
+                Truck Loading Type *
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 bg-neutral-100 p-1 rounded-xl border border-neutral-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingType('local');
+                    setLoadingTypeManual(true);
+                  }}
+                  className={`py-1.5 px-2.5 rounded-lg text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    loadingType === 'local'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-white'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>Local</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingType('export');
+                    setLoadingTypeManual(true);
+                  }}
+                  className={`py-1.5 px-2.5 rounded-lg text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    loadingType === 'export'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-white'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span>Export</span>
+                </button>
               </div>
             </div>
 

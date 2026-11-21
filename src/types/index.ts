@@ -1,4 +1,5 @@
 export type TruckStatus = 'waiting' | 'called' | 'under_loading' | 'completed' | 'cancelled';
+export type TruckLoadingType = 'local' | 'export';
 
 export interface LoadingSlipItem {
   srNo: number;
@@ -65,6 +66,7 @@ export interface TicketRecord {
   iqamaNumber?: string;       // ID / Iqama Number
   transporterName: string;
   destinationPlace: string;   // Place / destination name
+  loadingType?: TruckLoadingType; // 'local' | 'export'
   delNoteNumber?: string;     // e.g. "A1DD00001" (Mandatory for ticket creation)
   status: TruckStatus;
   loadingSlip?: LoadingSlipData;
@@ -95,6 +97,18 @@ export interface DriverMasterRecord {
   tripCount: number;
 }
 
+export interface MaterialMasterRecord {
+  id: string;
+  materialName: string;
+  packType: string;
+  palletRatio: number;
+  remarks?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CompanySettings {
   companyName: string;
   companySubtitle: string;
@@ -120,6 +134,8 @@ export interface PublicBranding {
 export type UserRoleName =
   | 'admin'
   | 'user'
+  | 'mmd_manager'
+  | 'view_only'
   | 'forklift_operator'
   | 'liquid_store_operator'
   | 'ex_factory_operator';
@@ -268,6 +284,7 @@ export interface ExFactoryEntry {
   entryDate: string; // YYYY-MM-DD (automatic current date)
   delNoteNumber: string;
   customerName: string;
+  loadingType?: TruckLoadingType;
   truckNumber: string;
   driverName: string;
   mobileNumber: string;

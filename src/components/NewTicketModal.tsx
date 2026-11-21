@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { TicketRecord, DriverMasterRecord, CompanySettings } from '../types';
+import { TicketRecord, TruckLoadingType, DriverMasterRecord, CompanySettings } from '../types';
 import { StorageService, getCurrentTimeString, createEmpty8Rows } from '../services/storage';
 import { ApiClient } from '../services/api';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
-import { Ticket, Truck, User, Phone, MapPin, Building2, DoorOpen, Hash, AlertCircle, Save, Printer, MessageSquare, X, FileText } from 'lucide-react';
+import { inferLoadingTypeFromDestination } from '../utils/loadingType';
+import { Ticket, Truck, User, Phone, MapPin, Building2, DoorOpen, Hash, AlertCircle, Save, Printer, MessageSquare, X, FileText, Globe } from 'lucide-react';
 
 interface NewTicketModalProps {
   date: string;
@@ -36,6 +37,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   const [iqamaNumber, setIqamaNumber] = useState('');
   const [transporterName, setTransporterName] = useState('');
   const [destinationPlace, setDestinationPlace] = useState('');
+  const [loadingType, setLoadingType] = useState<TruckLoadingType>('local');
+  const [loadingTypeManual, setLoadingTypeManual] = useState(false);
   const [selectedGate, setSelectedGate] = useState<string>(settings.gates[0] || 'Gate 1');
   const [remarks, setRemarks] = useState('');
   const [priority, setPriority] = useState<'normal' | 'urgent'>('normal');
@@ -80,6 +83,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setTransporterName(item.transporterName || '');
     if (item.defaultDestination) {
       setDestinationPlace(item.defaultDestination);
+      if (!loadingTypeManual) {
+        const inferred = inferLoadingTypeFromDestination(item.defaultDestination);
+        if (inferred) setLoadingType(inferred);
+      }
     }
     setMatchedDriver(item);
   };
@@ -201,6 +208,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
         iqamaNumber: iqamaNumber.trim().toUpperCase(),
         transporterName: transporterName.trim().toUpperCase(),
         destinationPlace: cleanDest,
+        loadingType,
         status: 'waiting',
         priority,
         remarks: remarks.trim().toUpperCase(),
@@ -496,8 +504,8 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
           )}
 
-          {/* Place Name and Transporter Name */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Place Name, Loading Type (Local / Export), and Transporter Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
                 Destination Place / Unloading Point
@@ -509,10 +517,55 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
                 <input
                   type="text"
                   value={destinationPlace}
-                  onChange={(e) => setDestinationPlace(e.target.value)}
-                  placeholder="e.g. Central Warehouse Riyadh / Jeddah"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDestinationPlace(val);
+                    if (!loadingTypeManual) {
+                      const inferred = inferLoadingTypeFromDestination(val);
+                      if (inferred) setLoadingType(inferred);
+                    }
+                  }}
+                  placeholder="e.g. Riyadh / Kuwait / Export"
                   className="w-full pl-9 pr-3 py-2 text-xs font-semibold rounded-xl border border-neutral-300 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-neutral-700 tracking-wide block mb-1">
+                Truck Loading Type *
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 bg-neutral-100 p-1 rounded-xl border border-neutral-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingType('local');
+                    setLoadingTypeManual(true);
+                  }}
+                  className={`py-1.5 px-2.5 rounded-lg text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    loadingType === 'local'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-white'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  <span>Local</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadingType('export');
+                    setLoadingTypeManual(true);
+                  }}
+                  className={`py-1.5 px-2.5 rounded-lg text-xs font-extrabold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    loadingType === 'export'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-white'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5 shrink-0" />
+                  <span>Export</span>
+                </button>
               </div>
             </div>
 

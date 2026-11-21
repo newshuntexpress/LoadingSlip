@@ -7,6 +7,7 @@ import {
   requireCsrf,
   requirePasswordChanged,
   requirePermission,
+  requireAnyPermission,
 } from './security.ts';
 
 interface DbTankRow {
@@ -242,13 +243,18 @@ export function buildLiquidStoreState() {
 export const liquidRouter = express.Router();
 
 // Protect all /api/liquid/* routes strictly
-liquidRouter.use(requireAuth, requirePasswordChanged, rejectRestrictedOperators, requirePermission('liquid.store'));
+liquidRouter.use(
+  requireAuth,
+  requirePasswordChanged,
+  rejectRestrictedOperators,
+  requireAnyPermission(['liquid.view', 'liquid.store', 'liquid.materials'])
+);
 
 liquidRouter.get('/state', (_req: Request, res: Response) => {
   res.json(buildLiquidStoreState());
 });
 
-liquidRouter.post('/transactions', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.post('/transactions', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const b = req.body || {};
   const type = b.type === 'OUTWARD' ? 'OUTWARD' : b.type === 'INWARD' ? 'INWARD' : null;
   const txDate = String(b.txDate || '').trim();
@@ -391,7 +397,7 @@ liquidRouter.post('/transactions', requireCsrf, (req: Request, res: Response) =>
   res.status(201).json({ state: buildLiquidStoreState(), txCode: result.txCode });
 });
 
-liquidRouter.put('/transactions/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.put('/transactions/:id', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const txId = Number(req.params.id);
   if (!Number.isInteger(txId) || txId <= 0) {
     res.status(400).json({ error: 'Invalid transaction ID.' });
@@ -506,7 +512,7 @@ liquidRouter.put('/transactions/:id', requireCsrf, (req: Request, res: Response)
   res.json({ state: buildLiquidStoreState(), txCode: result.txCode });
 });
 
-liquidRouter.delete('/transactions/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.delete('/transactions/:id', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const txId = Number(req.params.id);
   if (!Number.isInteger(txId) || txId <= 0) {
     res.status(400).json({ error: 'Invalid transaction ID.' });
@@ -559,7 +565,7 @@ liquidRouter.delete('/transactions/:id', requireCsrf, (req: Request, res: Respon
   res.json({ state: buildLiquidStoreState(), txCode: result.txCode });
 });
 
-liquidRouter.post('/tanks', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.post('/tanks', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const b = req.body || {};
   const name = upperStr(b.name);
   const totalCapacityKg = Number(b.totalCapacityKg);
@@ -604,7 +610,7 @@ liquidRouter.post('/tanks', requireCsrf, (req: Request, res: Response) => {
   res.status(201).json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.put('/tanks/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.put('/tanks/:id', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const tankId = Number(req.params.id);
   if (!Number.isInteger(tankId) || tankId <= 0) {
     res.status(400).json({ error: 'Invalid tank ID.' });
@@ -667,7 +673,7 @@ liquidRouter.put('/tanks/:id', requireCsrf, (req: Request, res: Response) => {
   res.json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.delete('/tanks/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.delete('/tanks/:id', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const tankId = Number(req.params.id);
   if (!Number.isInteger(tankId) || tankId <= 0) {
     res.status(400).json({ error: 'Invalid tank ID.' });
@@ -705,7 +711,11 @@ liquidRouter.delete('/tanks/:id', requireCsrf, (req: Request, res: Response) => 
   res.json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.post('/materials', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.post(
+  '/materials',
+  requireCsrf,
+  requireAnyPermission(['liquid.store', 'liquid.materials']),
+  (req: Request, res: Response) => {
   const b = req.body || {};
   const name = upperStr(b.name);
   const code = (upperStr(b.code) || name.slice(0, 8));
@@ -733,7 +743,11 @@ liquidRouter.post('/materials', requireCsrf, (req: Request, res: Response) => {
   res.status(201).json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.put('/materials/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.put(
+  '/materials/:id',
+  requireCsrf,
+  requireAnyPermission(['liquid.store', 'liquid.materials']),
+  (req: Request, res: Response) => {
   const matId = Number(req.params.id);
   if (!Number.isInteger(matId) || matId <= 0) {
     res.status(400).json({ error: 'Invalid material ID.' });
@@ -788,7 +802,11 @@ liquidRouter.put('/materials/:id', requireCsrf, (req: Request, res: Response) =>
   res.json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.delete('/materials/:id', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.delete(
+  '/materials/:id',
+  requireCsrf,
+  requireAnyPermission(['liquid.store', 'liquid.materials']),
+  (req: Request, res: Response) => {
   const matId = Number(req.params.id);
   if (!Number.isInteger(matId) || matId <= 0) {
     res.status(400).json({ error: 'Invalid material ID.' });
@@ -824,7 +842,7 @@ liquidRouter.delete('/materials/:id', requireCsrf, (req: Request, res: Response)
   res.json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.put('/settings', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.put('/settings', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const b = req.body || {};
   const facilityName = String(b.facilityName ?? '').trim() || 'Liquid Material Camp Store — Sector 4';
   const theme = b.theme === 'dark' ? 'dark' : 'light';
@@ -838,7 +856,7 @@ liquidRouter.put('/settings', requireCsrf, (req: Request, res: Response) => {
   res.json({ state: buildLiquidStoreState() });
 });
 
-liquidRouter.post('/reset', requireCsrf, (req: Request, res: Response) => {
+liquidRouter.post('/reset', requireCsrf, requirePermission('liquid.store'), (req: Request, res: Response) => {
   const actorName = req.auth!.user.fullName;
   resetLiquidStoreToDefault(actorName);
 

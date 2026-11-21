@@ -1,7 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { db, logAudit } from './db.ts';
-import { upperStr, normalizeLoadingSlip } from './normalize.ts';
+import { upperStr, normalizeLoadingSlip, normalizeLoadingType } from './normalize.ts';
 import {
   getClientIp,
   requireAuth,
@@ -10,12 +10,14 @@ import {
   requirePermission,
   requireAnyPermission,
 } from './security.ts';
+import { syncMissingMaterialsFromLoadingSlip } from './materials.ts';
 
 interface DbExFactoryRow {
   id: string;
   entry_date: string;
   del_note_number: string;
   customer_name: string;
+  loading_type?: string | null;
   truck_number: string;
   driver_name: string;
   mobile_number: string;
@@ -55,11 +57,13 @@ function parseSlipJson(raw: string | null | undefined): Record<string, any> | un
 
 function mapRow(r: DbExFactoryRow) {
   const loadingSlip = parseSlipJson(r.loading_slip_json);
+  const loadingType = normalizeLoadingType(r.loading_type) || 'local';
   return {
     id: r.id,
     entryDate: r.entry_date,
     delNoteNumber: upperStr(r.del_note_number),
     customerName: upperStr(r.customer_name),
+    loadingType,
     truckNumber: upperStr(r.truck_number),
     driverName: upperStr(r.driver_name),
     mobileNumber: upperStr(r.mobile_number),
@@ -114,6 +118,7 @@ exFactoryRouter.post('/', requirePermission('ex_factory.create'), requireCsrf, (
   const entryDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : getTodayPlantDateString();
   const delNoteNumber = upperStr(b.delNoteNumber);
   const customerName = upperStr(b.customerName);
+  const loadingType = normalizeLoadingType(b.loadingType) || 'local';
   const truckNumber = upperStr(b.truckNumber);
   const driverName = upperStr(b.driverName);
   const mobileNumber = upperStr(b.mobileNumber);
@@ -138,14 +143,15 @@ exFactoryRouter.post('/', requirePermission('ex_factory.create'), requireCsrf, (
 
   db.prepare(
     `INSERT INTO ex_factory_entries (
-      id, entry_date, del_note_number, customer_name, truck_number, driver_name, mobile_number, iqama_number, loading_slip_json,
+      id, entry_date, del_note_number, customer_name, loading_type, truck_number, driver_name, mobile_number, iqama_number, loading_slip_json,
       created_by, updated_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)`
   ).run(
     id,
     entryDate,
     delNoteNumber,
     customerName,
+    loadingType,
     truckNumber,
     driverName,
     mobileNumber,
@@ -184,6 +190,7 @@ exFactoryRouter.put('/:id', requirePermission('ex_factory.update'), requireCsrf,
   const entryDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : existing.entry_date;
   const delNoteNumber = upperStr(b.delNoteNumber);
   const customerName = upperStr(b.customerName);
+  const loadingType = normalizeLoadingType(b.loadingType) || normalizeLoadingType(existing.loading_type) || 'local';
   const truckNumber = upperStr(b.truckNumber);
   const driverName = upperStr(b.driverName);
   const mobileNumber = upperStr(b.mobileNumber);
@@ -199,10 +206,10 @@ exFactoryRouter.put('/:id', requirePermission('ex_factory.update'), requireCsrf,
 
   db.prepare(
     `UPDATE ex_factory_entries
-     SET entry_date = ?, del_note_number = ?, customer_name = ?, truck_number = ?,
+     SET entry_date = ?, del_note_number = ?, customer_name = ?, loading_type = ?, truck_number = ?,
          driver_name = ?, mobile_number = ?, iqama_number = ?, updated_by = ?, updated_at = ?
      WHERE id = ?`
-  ).run(entryDate, delNoteNumber, customerName, truckNumber, driverName, mobileNumber, iqamaNumber, actor, now, id);
+  ).run(entryDate, delNoteNumber, customerName, loadingType, truckNumber, driverName, mobileNumber, iqamaNumber, actor, now, id);
 
   const updated = db.prepare(`SELECT * FROM ex_factory_entries WHERE id = ?`).get(id) as DbExFactoryRow;
 
@@ -283,6 +290,13 @@ exFactoryRouter.put(
 
     const updated = db.prepare(`SELECT * FROM ex_factory_entries WHERE id = ?`).get(id) as DbExFactoryRow;
 
+    const autoSavedMaterials = syncMissingMaterialsFromLoadingSlip(
+      normalizedSlip.items,
+      actor,
+      req.auth!.user.id,
+      getClientIp(req)
+    ).addedMaterials;
+
     logAudit({
       actorUserId: req.auth!.user.id,
       actorUsername: actor,
@@ -293,7 +307,10 @@ exFactoryRouter.put(
       ipAddress: getClientIp(req),
     });
 
-    res.json({ entry: mapRow(updated) });
+    res.json({
+      entry: mapRow(updated),
+      ...(autoSavedMaterials.length > 0 ? { autoSavedMaterials } : {}),
+    });
   }
 );
 

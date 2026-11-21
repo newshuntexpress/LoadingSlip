@@ -236,6 +236,7 @@ db.exec(`
     entry_date TEXT NOT NULL,
     del_note_number TEXT NOT NULL,
     customer_name TEXT NOT NULL,
+    loading_type TEXT DEFAULT 'local',
     truck_number TEXT NOT NULL,
     driver_name TEXT DEFAULT '',
     mobile_number TEXT DEFAULT '',
@@ -283,6 +284,20 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_wa_logs_ticket_type ON whatsapp_notification_logs(ticket_id, message_type);
   CREATE INDEX IF NOT EXISTS idx_wa_logs_created_at ON whatsapp_notification_logs(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS material_master (
+    id TEXT PRIMARY KEY,
+    material_name TEXT UNIQUE NOT NULL COLLATE NOCASE,
+    pack_type TEXT NOT NULL,
+    pallet_ratio INTEGER NOT NULL DEFAULT 23,
+    remarks TEXT DEFAULT '',
+    created_by TEXT,
+    updated_by TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_material_master_name ON material_master(material_name);
 `);
 
 // Safe additive schema migrations for existing databases
@@ -306,6 +321,9 @@ db.exec(`
   if (!exColNames.has('loading_slip_json')) {
     db.exec(`ALTER TABLE ex_factory_entries ADD COLUMN loading_slip_json TEXT DEFAULT ''`);
   }
+  if (!exColNames.has('loading_type')) {
+    db.exec(`ALTER TABLE ex_factory_entries ADD COLUMN loading_type TEXT DEFAULT 'local'`);
+  }
 }
 
 {
@@ -324,8 +342,14 @@ const SEED_PERMISSIONS: Array<{ id: string; key: string; name: string; category:
   { id: 'perm_tickets_delete', key: 'tickets.delete', name: 'Delete Ticket Records', category: 'Operations' },
   { id: 'perm_slips_print', key: 'slips.print', name: 'Print & Export Loading Slips / Tokens', category: 'Documents' },
   { id: 'perm_drivers_manage', key: 'drivers.manage', name: 'Manage Driver & Vehicle Master Directory', category: 'Operations' },
+  { id: 'perm_materials_view', key: 'materials.view', name: 'View Material Master (Search & Auto-Fill Lookup)', category: 'Operations' },
+  { id: 'perm_materials_manage', key: 'materials.manage', name: 'Manage Material Master (Add / Edit / Delete Materials)', category: 'Operations' },
   { id: 'perm_reports_view', key: 'reports.view', name: 'View Daily Reports & Export CSV', category: 'Reporting' },
-  { id: 'perm_liquid_store', key: 'liquid.store', name: 'Access & Manage Liquid Material Camp Store', category: 'Operations' },
+  { id: 'perm_dispatch_view', key: 'dispatch.view', name: 'View Dispatch Details (Material-Wise Summary & Export)', category: 'Reporting' },
+  { id: 'perm_material_register_view', key: 'material_register.view', name: 'View Material Register (Loading Slip Line Items)', category: 'Reporting' },
+  { id: 'perm_liquid_view', key: 'liquid.view', name: 'View Liquid Material Camp Store (Read-Only)', category: 'Operations' },
+  { id: 'perm_liquid_store', key: 'liquid.store', name: 'Manage Liquid Material Camp Store (Inward/Outward & Tanks)', category: 'Operations' },
+  { id: 'perm_liquid_materials', key: 'liquid.materials', name: 'Manage Material Master Data (Create / Edit / Delete)', category: 'Operations' },
   { id: 'perm_ex_factory_view', key: 'ex_factory.view', name: 'View Ex-Factory Dispatch Entries', category: 'Operations' },
   { id: 'perm_ex_factory_create', key: 'ex_factory.create', name: 'Create Ex-Factory Dispatch Entries', category: 'Operations' },
   { id: 'perm_ex_factory_update', key: 'ex_factory.update', name: 'Update Ex-Factory Dispatch Entries', category: 'Operations' },
@@ -342,11 +366,69 @@ const USER_DEFAULT_PERMISSION_KEYS = [
   'forklift.operate',
   'slips.print',
   'drivers.manage',
+  'materials.view',
+  'materials.manage',
   'reports.view',
+  'dispatch.view',
+  'material_register.view',
+  'liquid.view',
   'liquid.store',
+  'liquid.materials',
   'ex_factory.view',
   'ex_factory.create',
   'ex_factory.update',
+];
+
+export const MMD_MANAGER_DEFAULT_PERMISSION_KEYS = [
+  'tickets.view',
+  'tickets.create',
+  'tickets.update',
+  'forklift.operate',
+  'slips.print',
+  'drivers.manage',
+  'materials.view',
+  'materials.manage',
+  'reports.view',
+  'dispatch.view',
+  'material_register.view',
+  'liquid.view',
+  'liquid.store',
+  'liquid.materials',
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
+];
+
+export const VIEW_ONLY_ALLOWED_PERMISSION_KEYS = [
+  'tickets.view',
+  'materials.view',
+  'dispatch.view',
+  'material_register.view',
+  'reports.view',
+  'liquid.view',
+  'ex_factory.view',
+];
+
+export const USER_ASSIGNABLE_PERMISSION_KEYS = [
+  'tickets.view',
+  'tickets.create',
+  'tickets.update',
+  'forklift.operate',
+  'tickets.delete',
+  'slips.print',
+  'drivers.manage',
+  'materials.view',
+  'materials.manage',
+  'reports.view',
+  'dispatch.view',
+  'material_register.view',
+  'liquid.view',
+  'liquid.store',
+  'liquid.materials',
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
+  'ex_factory.delete',
 ];
 
 export const FORKLIFT_ALLOWED_PERMISSION_KEYS = [
@@ -355,7 +437,9 @@ export const FORKLIFT_ALLOWED_PERMISSION_KEYS = [
 ];
 
 export const LIQUID_STORE_ALLOWED_PERMISSION_KEYS = [
+  'liquid.view',
   'liquid.store',
+  'liquid.materials',
 ];
 
 export const EX_FACTORY_ALLOWED_PERMISSION_KEYS = [
@@ -378,6 +462,20 @@ function seedDatabase(): void {
   );
   insertRole.run('role_admin', 'admin', 'Administrator', 'Full system authorization, user management, settings, and audit control.', now);
   insertRole.run('role_user', 'user', 'User / Operator', 'Authorized gate queue, loading slip, and operational access.', now);
+  insertRole.run(
+    'role_mmd_manager',
+    'mmd_manager',
+    'MMD Manager',
+    'Material Management & Dispatch Manager across Gate Queue, Dispatch Details, Material Register, Material Master, Liquid Store, and Ex-Factory.',
+    now
+  );
+  insertRole.run(
+    'role_view_only',
+    'view_only',
+    'View Only',
+    'Read-only monitoring and reporting access across permitted sections without create, edit, or delete rights.',
+    now
+  );
   insertRole.run(
     'role_forklift_operator',
     'forklift_operator',
@@ -413,6 +511,12 @@ function seedDatabase(): void {
     if (USER_DEFAULT_PERMISSION_KEYS.includes(perm.key)) {
       insertRolePerm.run('role_user', perm.id);
     }
+    if (MMD_MANAGER_DEFAULT_PERMISSION_KEYS.includes(perm.key)) {
+      insertRolePerm.run('role_mmd_manager', perm.id);
+    }
+    if (VIEW_ONLY_ALLOWED_PERMISSION_KEYS.includes(perm.key)) {
+      insertRolePerm.run('role_view_only', perm.id);
+    }
     if (FORKLIFT_ALLOWED_PERMISSION_KEYS.includes(perm.key)) {
       insertRolePerm.run('role_forklift_operator', perm.id);
     }
@@ -422,6 +526,92 @@ function seedDatabase(): void {
     if (EX_FACTORY_DEFAULT_PERMISSION_KEYS.includes(perm.key)) {
       insertRolePerm.run('role_ex_factory_operator', perm.id);
     }
+  }
+
+  // One-time migration: grant dispatch.view, material_register.view, liquid.view & liquid.materials
+  // to existing non-admin users who already held tickets.view/reports.view/liquid.store overrides
+  const rbacDispatchMaterialSynced = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'rbac_dispatch_material_mmd_v1'`)
+    .get() as { key: string } | undefined;
+  if (!rbacDispatchMaterialSynced) {
+    db.transaction(() => {
+      const existingUsers = db
+        .prepare(
+          `SELECT u.id, r.name as role_name FROM users u INNER JOIN roles r ON r.id = u.role_id`
+        )
+        .all() as Array<{ id: string; role_name: string }>;
+      const insertUserPerm = db.prepare(
+        `INSERT OR IGNORE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
+      );
+      for (const u of existingUsers) {
+        if (u.role_name === 'admin' || u.role_name === 'forklift_operator' || u.role_name === 'ex_factory_operator') {
+          continue;
+        }
+        const overrides = db
+          .prepare(`SELECT permission_key, granted FROM user_permissions WHERE user_id = ?`)
+          .all(u.id) as Array<{ permission_key: string; granted: number }>;
+        if (overrides.length === 0) continue;
+        const grantedSet = new Set(overrides.filter((o) => o.granted === 1).map((o) => o.permission_key));
+        if (u.role_name === 'user') {
+          if (grantedSet.has('tickets.view') || grantedSet.has('reports.view')) {
+            insertUserPerm.run(u.id, 'dispatch.view');
+            insertUserPerm.run(u.id, 'material_register.view');
+          }
+          if (grantedSet.has('liquid.store')) {
+            insertUserPerm.run(u.id, 'liquid.view');
+            insertUserPerm.run(u.id, 'liquid.materials');
+          }
+        } else if (u.role_name === 'liquid_store_operator' && grantedSet.has('liquid.store')) {
+          insertUserPerm.run(u.id, 'liquid.view');
+          insertUserPerm.run(u.id, 'liquid.materials');
+        }
+      }
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('rbac_dispatch_material_mmd_v1', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
+  }
+
+  // One-time migration: grant materials.view & materials.manage to existing non-admin users with operational ticket permissions
+  const rbacMaterialMasterSynced = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'rbac_material_master_v1'`)
+    .get() as { key: string } | undefined;
+  if (!rbacMaterialMasterSynced) {
+    db.transaction(() => {
+      const existingUsers = db
+        .prepare(
+          `SELECT u.id, r.name as role_name FROM users u INNER JOIN roles r ON r.id = u.role_id`
+        )
+        .all() as Array<{ id: string; role_name: string }>;
+      const insertUserPerm = db.prepare(
+        `INSERT OR IGNORE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
+      );
+      for (const u of existingUsers) {
+        if (u.role_name === 'admin' || u.role_name === 'forklift_operator' || u.role_name === 'liquid_store_operator' || u.role_name === 'ex_factory_operator') {
+          continue;
+        }
+        const overrides = db
+          .prepare(`SELECT permission_key, granted FROM user_permissions WHERE user_id = ?`)
+          .all(u.id) as Array<{ permission_key: string; granted: number }>;
+        if (overrides.length === 0) continue;
+        const grantedSet = new Set(overrides.filter((o) => o.granted === 1).map((o) => o.permission_key));
+        if (u.role_name === 'view_only') {
+          if (grantedSet.has('tickets.view') || grantedSet.has('dispatch.view') || grantedSet.has('material_register.view')) {
+            insertUserPerm.run(u.id, 'materials.view');
+          }
+        } else {
+          if (grantedSet.has('tickets.view') || grantedSet.has('dispatch.view') || grantedSet.has('material_register.view')) {
+            insertUserPerm.run(u.id, 'materials.view');
+          }
+          if (grantedSet.has('tickets.update') || grantedSet.has('drivers.manage')) {
+            insertUserPerm.run(u.id, 'materials.manage');
+          }
+        }
+      }
+      db.prepare(
+        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('rbac_material_master_v1', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
   }
 
   const insertSettings = db.prepare(
@@ -525,6 +715,33 @@ function seedDatabase(): void {
 
       db.prepare(
         `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default_records_seeded', ?, 'system', ?)`
+      ).run(JSON.stringify({ version: 1 }), now);
+    })();
+  }
+
+  // Seed starter Material Master records once if empty
+  const matSeededMarker = db
+    .prepare(`SELECT key FROM app_settings WHERE key = 'material_master_seeded_v1'`)
+    .get() as { key: string } | undefined;
+  if (!matSeededMarker) {
+    db.transaction(() => {
+      const matCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM material_master`).get() as { cnt: number }).cnt;
+      if (matCnt === 0) {
+        const insertMat = db.prepare(
+          `INSERT OR IGNORE INTO material_master (id, material_name, pack_type, pallet_ratio, remarks, created_by, updated_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'system', 'system', ?, ?)`
+        );
+        const starterMaterials = [
+          { id: 'mat-seed-ds40200', name: 'DS40200', pack: 'Rolls', ratio: 23, remarks: 'Bituminous Waterproofing Membrane' },
+          { id: 'mat-seed-ds40250', name: 'DS40250', pack: 'Rolls', ratio: 23, remarks: 'Bituminous Waterproofing Membrane' },
+          { id: 'mat-seed-ms60', name: 'MS60', pack: 'Board', ratio: 100, remarks: 'Protection Board' },
+        ];
+        for (const m of starterMaterials) {
+          insertMat.run(m.id, m.name, m.pack, m.ratio, m.remarks, now, now);
+        }
+      }
+      db.prepare(
+        `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('material_master_seeded_v1', ?, 'system', ?)`
       ).run(JSON.stringify({ version: 1 }), now);
     })();
   }
@@ -724,6 +941,16 @@ export function computeEffectivePermissions(userId: string, roleId: string, role
         .map((o) => o.permission_key);
     }
     return rolePerms.map((r) => r.key).filter((k) => exFactoryAllowed.has(k));
+  }
+
+  if (roleName === 'view_only') {
+    const viewOnlyAllowed = new Set(VIEW_ONLY_ALLOWED_PERMISSION_KEYS);
+    if (overrides.length > 0) {
+      return overrides
+        .filter((o) => o.granted === 1 && viewOnlyAllowed.has(o.permission_key))
+        .map((o) => o.permission_key);
+    }
+    return rolePerms.map((r) => r.key).filter((k) => viewOnlyAllowed.has(k));
   }
 
   if (overrides.length > 0) {

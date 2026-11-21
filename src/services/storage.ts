@@ -1,5 +1,12 @@
-import { TicketRecord, DriverMasterRecord, CompanySettings, LoadingSlipItem } from '../types';
+import {
+  TicketRecord,
+  DriverMasterRecord,
+  MaterialMasterRecord,
+  CompanySettings,
+  LoadingSlipItem,
+} from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
+import { resolveLoadingType } from '../utils/loadingType';
 
 export const DEFAULT_SETTINGS: CompanySettings = {
   companyName: 'ARABIAN WATERPROOFING CO. AWAZEL',
@@ -61,6 +68,7 @@ export function createEmpty8Rows(): LoadingSlipItem[] {
 // In-memory cache synchronized with authenticated backend API (wiped on logout)
 let cacheTickets: TicketRecord[] = [];
 let cacheDrivers: DriverMasterRecord[] = [];
+let cacheMaterials: MaterialMasterRecord[] = [];
 let cacheSettings: CompanySettings = DEFAULT_SETTINGS;
 let cacheDefaultSettings: CompanySettings = DEFAULT_SETTINGS;
 
@@ -69,6 +77,7 @@ export const StorageService = {
   hydrateFromServer(payload: {
     tickets?: TicketRecord[];
     drivers?: DriverMasterRecord[];
+    materials?: MaterialMasterRecord[];
     settings?: CompanySettings | null;
     defaultSettings?: CompanySettings | null;
   }): void {
@@ -84,6 +93,9 @@ export const StorageService = {
         driverPhone: formatSaudiPhoneNumber(d.driverPhone),
       }));
     }
+    if (payload.materials) {
+      cacheMaterials = payload.materials;
+    }
     if (payload.defaultSettings) {
       cacheDefaultSettings = { ...DEFAULT_SETTINGS, ...payload.defaultSettings };
     }
@@ -95,8 +107,17 @@ export const StorageService = {
   clearCache(): void {
     cacheTickets = [];
     cacheDrivers = [];
+    cacheMaterials = [];
     cacheSettings = DEFAULT_SETTINGS;
     cacheDefaultSettings = DEFAULT_SETTINGS;
+  },
+
+  getMaterials(): MaterialMasterRecord[] {
+    return cacheMaterials;
+  },
+
+  saveMaterials(materials: MaterialMasterRecord[]): void {
+    cacheMaterials = materials;
   },
 
   getDefaultSettings(): CompanySettings {
@@ -358,6 +379,7 @@ export const StorageService = {
       'ID / Iqama No',
       'Transporter',
       'Destination Place',
+      'Loading Type',
       'Status',
       'Del Note No',
       'Forklift Operator / Loaded By',
@@ -388,6 +410,7 @@ export const StorageService = {
       `"${t.iqamaNumber || ''}"`,
       `"${t.transporterName || ''}"`,
       `"${t.destinationPlace || ''}"`,
+      resolveLoadingType(t) === 'export' ? 'EXPORT' : 'LOCAL',
       formatStatus(t.status),
       t.loadingSlip?.delNoteNumber || '',
       `"${t.loadingSlip?.loadedBy || t.loadingSlip?.checkedBy || ''}"`,

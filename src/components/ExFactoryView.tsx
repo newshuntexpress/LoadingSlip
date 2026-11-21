@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
-import { AuthUser, CompanySettings, DriverMasterRecord, ExFactoryEntry, TicketRecord } from '../types';
+import { AuthUser, CompanySettings, DriverMasterRecord, ExFactoryEntry, TicketRecord, TruckLoadingType } from '../types';
 import { ApiClient, withBackgroundPoll } from '../services/api';
-import { formatDisplayDate, getTodayDateString } from '../services/storage';
+import { formatDisplayDate, getTodayDateString, StorageService } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
+import { resolveLoadingType } from '../utils/loadingType';
 import { LoadingSlipModal } from './LoadingSlipModal';
 import { LoadingSlipPrintView } from './LoadingSlipPrintView';
 import {
@@ -25,6 +26,8 @@ import {
   Eye,
   FileText,
   Printer,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 
 interface ExFactoryViewProps {
@@ -143,6 +146,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
   const [entryDate, setEntryDate] = useState<string>(todayDate);
   const [delNoteNumber, setDelNoteNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [loadingType, setLoadingType] = useState<TruckLoadingType>('local');
   const [truckNumber, setTruckNumber] = useState('');
   const [driverName, setDriverName] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
@@ -261,6 +265,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     setEntryDate(getTodayDateString());
     setDelNoteNumber('');
     setCustomerName('');
+    setLoadingType('local');
     setTruckNumber('');
     setDriverName('');
     setMobileNumber('');
@@ -387,6 +392,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           entryDate: autoDate,
           delNoteNumber: cleanDn,
           customerName: cleanCust,
+          loadingType,
           truckNumber: cleanTruck,
           driverName: cleanDriver,
           mobileNumber: cleanMobile,
@@ -400,6 +406,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           entryDate: autoDate,
           delNoteNumber: cleanDn,
           customerName: cleanCust,
+          loadingType,
           truckNumber: cleanTruck,
           driverName: cleanDriver,
           mobileNumber: cleanMobile,
@@ -432,18 +439,33 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     if (!activeEntryForSlip || !updatedTicket.loadingSlip) return;
     const targetSrNo = activeEntryForSlip.srNo;
     try {
-      const updatedEntry = await ApiClient.saveExFactoryLoadingSlip(activeEntryForSlip.entry.id, {
-        loadingSlip: updatedTicket.loadingSlip,
-        truckNumber: updatedTicket.truckNumber,
-        driverName: updatedTicket.driverName,
-        mobileNumber: updatedTicket.driverPhone,
-      });
+      const { entry: updatedEntry, autoSavedMaterials } =
+        await ApiClient.saveExFactoryLoadingSlipWithResult(activeEntryForSlip.entry.id, {
+          loadingSlip: updatedTicket.loadingSlip,
+          truckNumber: updatedTicket.truckNumber,
+          driverName: updatedTicket.driverName,
+          mobileNumber: updatedTicket.driverPhone,
+        });
+      if (autoSavedMaterials && autoSavedMaterials.length > 0) {
+        const cached = StorageService.getMaterials();
+        const map = new Map(cached.map((m) => [m.materialName.trim().toUpperCase(), m]));
+        for (const added of autoSavedMaterials) {
+          map.set(added.materialName.trim().toUpperCase(), added);
+        }
+        StorageService.saveMaterials(
+          Array.from(map.values()).sort((a, b) => a.materialName.localeCompare(b.materialName))
+        );
+      }
       setEntries((prev) => prev.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
       setLastSavedEntry((prev) => (prev?.id === updatedEntry.id ? updatedEntry : prev));
       setActiveEntryForSlip(null);
+      const autoSavedSuffix =
+        autoSavedMaterials && autoSavedMaterials.length > 0
+          ? ` | Auto-saved to Material Master: ${autoSavedMaterials.map((m) => m.materialName).join(', ')}`
+          : '';
       showToast(
         'success',
-        `Loading Slip saved for ${updatedEntry.delNoteNumber} (${updatedEntry.loadingSlip?.totalQty || 0} Qty · ${updatedEntry.loadingSlip?.totalPallets || 0} Pallets).`
+        `Loading Slip saved for ${updatedEntry.delNoteNumber} (${updatedEntry.loadingSlip?.totalQty || 0} Qty · ${updatedEntry.loadingSlip?.totalPallets || 0} Pallets)${autoSavedSuffix}`
       );
       if (openPrintDirectly) {
         setActiveEntryForPrintSlip({ entry: updatedEntry, srNo: targetSrNo });
@@ -458,6 +480,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     setEntryDate(entry.entryDate);
     setDelNoteNumber(entry.delNoteNumber);
     setCustomerName(entry.customerName);
+    setLoadingType(resolveLoadingType({ loadingType: entry.loadingType, destinationPlace: entry.customerName }));
     setTruckNumber(entry.truckNumber);
     setDriverName(entry.driverName || '');
     setMobileNumber(entry.mobileNumber || '');
@@ -518,6 +541,19 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
   };
 
   const todayCount = useMemo(() => entries.filter((e) => e.entryDate === todayDate).length, [entries, todayDate]);
+  const localFilteredCount = useMemo(
+    () =>
+      filteredEntries.filter(
+        (e) =>
+          resolveLoadingType({
+            loadingType: e.loadingType,
+            destinationPlace: e.loadingSlip?.placeName,
+            placeName: e.customerName,
+          }) === 'local'
+      ).length,
+    [filteredEntries]
+  );
+  const exportFilteredCount = filteredEntries.length - localFilteredCount;
   const uniqueCustomersCount = useMemo(
     () => new Set(filteredEntries.map((e) => e.customerName.trim().toUpperCase())).size,
     [filteredEntries]
@@ -663,7 +699,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
       showToast('error', 'No Ex-Factory entries to export.');
       return;
     }
-    const header = ['Sr.No', 'Date', 'Del Note No.', 'Customer Name', 'Driver Name', 'Truck No.', 'Mobile No.', 'Iqama No.'];
+    const header = ['Sr.No', 'Date', 'Del Note No.', 'Customer Name', 'Type', 'Driver Name', 'Truck No.', 'Mobile No.', 'Iqama No.'];
     const lines = [
       header.join(','),
       ...targetCopyEntries.map((e, i) =>
@@ -672,6 +708,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           formatDisplayDate(e.entryDate),
           e.delNoteNumber,
           e.customerName,
+          resolveLoadingType({ loadingType: e.loadingType, destinationPlace: e.loadingSlip?.placeName, placeName: e.customerName }).toUpperCase(),
           e.driverName || '',
           e.truckNumber,
           e.mobileNumber,
@@ -680,7 +717,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
           .map((v) => `"${String(v ?? '').replaceAll('"', '""')}"`)
           .join(',')
       ),
-      ['"Total"', '""', `"${targetCopyEntries.length} entries"`, '""', '""', '""', '""', '""'].join(','),
+      ['"Total"', '""', `"${targetCopyEntries.length} entries"`, '""', '""', '""', '""', '""', '""'].join(','),
     ];
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -885,9 +922,12 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
       {/* KPI Summary Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="surface-3d surface-3d-hover rounded-2xl p-5">
-          <div className="text-xs font-bold text-[#5B738B]">Total Listed (Filtered)</div>
+          <div className="text-xs font-bold text-[#5B738B]">Total Truck Loading (Filtered)</div>
           <div className="text-3xl font-black font-mono tabular-nums text-[#0A6ED1] mt-1">
             {filteredEntries.length}
+          </div>
+          <div className="text-[11px] font-bold text-[#5B738B] mt-0.5">
+            Local: {localFilteredCount} · Export: {exportFilteredCount}
           </div>
         </div>
         <div className="surface-3d surface-3d-hover rounded-2xl p-5">
@@ -971,7 +1011,7 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
             </div>
 
             {/* Customer Name */}
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-xs font-bold text-[#354A5F] mb-1">Customer Name *</label>
               <input
                 type="text"
@@ -981,6 +1021,37 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
                 placeholder="Customer / Company name"
                 className="w-full px-3 py-2 text-xs rounded-lg border border-[#BCC8D4] bg-white text-[#1C2833] focus:outline-none focus:ring-2 focus:ring-[#0A6ED1]"
               />
+            </div>
+
+            {/* Loading Type (Local / Export) */}
+            <div>
+              <label className="block text-xs font-bold text-[#354A5F] mb-1">Loading Type *</label>
+              <div className="grid grid-cols-2 gap-1 bg-[#EFF4F9] p-1 rounded-lg border border-[#BCC8D4]">
+                <button
+                  type="button"
+                  onClick={() => setLoadingType('local')}
+                  className={`py-1.5 px-2 rounded text-xs font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${
+                    loadingType === 'local'
+                      ? 'bg-[#107E3E] text-white shadow-xs'
+                      : 'text-[#354A5F] hover:bg-white'
+                  }`}
+                >
+                  <MapPin className="w-3 h-3 shrink-0" />
+                  <span>Local</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoadingType('export')}
+                  className={`py-1.5 px-2 rounded text-xs font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${
+                    loadingType === 'export'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-[#354A5F] hover:bg-white'
+                  }`}
+                >
+                  <Globe className="w-3 h-3 shrink-0" />
+                  <span>Export</span>
+                </button>
+              </div>
             </div>
 
             {/* Driver Name (with instant lookup & autocomplete) */}
@@ -1379,7 +1450,29 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
                       <td className="py-2.5 px-3 font-mono font-extrabold text-[#0A6ED1] whitespace-nowrap">
                         {item.delNoteNumber}
                       </td>
-                      <td className="py-2.5 px-3 font-semibold text-[#1C2833]">{item.customerName}</td>
+                      <td className="py-2.5 px-3 font-semibold text-[#1C2833]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{item.customerName}</span>
+                          {(() => {
+                            const lType = resolveLoadingType({
+                              loadingType: item.loadingType,
+                              destinationPlace: item.loadingSlip?.placeName,
+                              placeName: item.customerName,
+                            });
+                            return (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase border ${
+                                  lType === 'export'
+                                    ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                }`}
+                              >
+                                {lType === 'export' ? 'Export' : 'Local'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="py-2.5 px-3 text-[#1C2833] whitespace-nowrap">{item.driverName || '—'}</td>
                       <td className="py-2.5 px-3 font-mono font-bold whitespace-nowrap">{item.truckNumber}</td>
                       <td className="py-2.5 px-3 font-mono whitespace-nowrap">{item.mobileNumber || '—'}</td>

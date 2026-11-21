@@ -40,12 +40,38 @@ const USER_ASSIGNABLE_PERMISSIONS = [
   { key: 'tickets.delete', label: 'Delete / Restore Tickets' },
   { key: 'slips.print', label: 'Print / Export PDF Slips & Tokens' },
   { key: 'drivers.manage', label: 'Manage Driver & Vehicle Master' },
+  { key: 'materials.view', label: 'Material Master (Loading Slip Auto-Fill): View & Search' },
+  { key: 'materials.manage', label: 'Material Master (Loading Slip Auto-Fill): Add / Edit / Delete' },
   { key: 'reports.view', label: 'View & Export Daily Reports' },
-  { key: 'liquid.store', label: 'Liquid Material Camp Store (Tanks, Inward/Outward & Reports)' },
+  { key: 'dispatch.view', label: 'Dispatch Details: View & Export Summary' },
+  { key: 'material_register.view', label: 'Material Register (Dispatch Items): View & Export' },
+  { key: 'liquid.view', label: 'Liquid Material Camp Store: View Only (Tanks & Stock)' },
+  { key: 'liquid.store', label: 'Liquid Material Camp Store: Inward / Outward & Tanks' },
+  { key: 'liquid.materials', label: 'Material Master Data (Liquid Store): Create / Edit / Delete' },
   { key: 'ex_factory.view', label: 'Ex-Factory Dispatch: View & Export Records' },
   { key: 'ex_factory.create', label: 'Ex-Factory Dispatch: Create / Save Entries' },
   { key: 'ex_factory.update', label: 'Ex-Factory Dispatch: Edit / Update Entries' },
   { key: 'ex_factory.delete', label: 'Ex-Factory Dispatch: Delete Entries' },
+];
+
+const VIEW_ONLY_PERMS = [
+  'tickets.view',
+  'materials.view',
+  'dispatch.view',
+  'material_register.view',
+  'reports.view',
+  'liquid.view',
+  'ex_factory.view',
+];
+
+const VIEW_ONLY_ASSIGNABLE_PERMISSIONS = [
+  { key: 'tickets.view', label: 'Gate Queue & Tickets (View Only)' },
+  { key: 'materials.view', label: 'Material Master (View Only)' },
+  { key: 'dispatch.view', label: 'Dispatch Details Summary (View Only)' },
+  { key: 'material_register.view', label: 'Material Register (View Only)' },
+  { key: 'reports.view', label: 'Daily Reports & Export (View Only)' },
+  { key: 'liquid.view', label: 'Liquid Store & Material Master (View Only)' },
+  { key: 'ex_factory.view', label: 'Ex-Factory Dispatch Records (View Only)' },
 ];
 
 const DEFAULT_USER_PERMS = [
@@ -53,8 +79,34 @@ const DEFAULT_USER_PERMS = [
   'tickets.create',
   'tickets.update',
   'slips.print',
+  'materials.view',
+  'materials.manage',
   'reports.view',
+  'dispatch.view',
+  'material_register.view',
+  'liquid.view',
   'liquid.store',
+  'liquid.materials',
+  'ex_factory.view',
+  'ex_factory.create',
+  'ex_factory.update',
+];
+
+const DEFAULT_MMD_MANAGER_PERMS = [
+  'tickets.view',
+  'tickets.create',
+  'tickets.update',
+  'forklift.operate',
+  'slips.print',
+  'drivers.manage',
+  'materials.view',
+  'materials.manage',
+  'reports.view',
+  'dispatch.view',
+  'material_register.view',
+  'liquid.view',
+  'liquid.store',
+  'liquid.materials',
   'ex_factory.view',
   'ex_factory.create',
   'ex_factory.update',
@@ -68,10 +120,12 @@ const FORKLIFT_ASSIGNABLE_PERMISSIONS = [
 const DEFAULT_FORKLIFT_PERMS = ['tickets.view', 'forklift.operate'];
 
 const LIQUID_STORE_ASSIGNABLE_PERMISSIONS = [
-  { key: 'liquid.store', label: 'Access & Manage Liquid Material Camp Store Only' },
+  { key: 'liquid.view', label: 'View Liquid Material Camp Store (Stock, Tanks & Reports)' },
+  { key: 'liquid.store', label: 'Manage Inward / Outward Entries & Tanks' },
+  { key: 'liquid.materials', label: 'Manage Material Master Data (Create / Edit / Delete)' },
 ];
 
-const DEFAULT_LIQUID_STORE_PERMS = ['liquid.store'];
+const DEFAULT_LIQUID_STORE_PERMS = ['liquid.view', 'liquid.store', 'liquid.materials'];
 
 const EX_FACTORY_ASSIGNABLE_PERMISSIONS = [
   { key: 'ex_factory.view', label: 'View, Search & Export Ex-Factory Dispatch Entries' },
@@ -297,6 +351,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setEditRoleName(
       u.roleName === 'admin'
         ? 'admin'
+        : u.roleName === 'mmd_manager'
+        ? 'mmd_manager'
+        : u.roleName === 'view_only'
+        ? 'view_only'
         : u.roleName === 'forklift_operator'
         ? 'forklift_operator'
         : u.roleName === 'liquid_store_operator'
@@ -624,6 +682,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             setNewPerms(DEFAULT_LIQUID_STORE_PERMS);
                           } else if (nextRole === 'ex_factory_operator') {
                             setNewPerms(DEFAULT_EX_FACTORY_PERMS);
+                          } else if (nextRole === 'mmd_manager') {
+                            setNewPerms(DEFAULT_MMD_MANAGER_PERMS);
+                          } else if (nextRole === 'view_only') {
+                            setNewPerms(VIEW_ONLY_PERMS);
                           } else if (nextRole === 'user') {
                             setNewPerms(DEFAULT_USER_PERMS);
                           }
@@ -639,6 +701,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         ) : (
                           <>
                             <option value="user">User / Operator (user)</option>
+                            <option value="mmd_manager">MMD Manager (mmd_manager)</option>
+                            <option value="view_only">View Only (view_only)</option>
                             <option value="forklift_operator">Forklift Operator (forklift_operator)</option>
                             <option value="liquid_store_operator">Liquid Store Operator (liquid_store_operator)</option>
                             <option value="ex_factory_operator">Ex-Factory Operator (ex_factory_operator)</option>
@@ -661,16 +725,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                     </div>
                   </div>
 
-                  {newRoleName === 'user' && (
+                  {(newRoleName === 'user' || newRoleName === 'mmd_manager') && (
                     <div className="bg-white border border-neutral-200 rounded-xl p-3 space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-[11px] font-bold text-neutral-700">
-                          Assigned Section & Operation Permissions:
+                          {newRoleName === 'mmd_manager'
+                            ? 'MMD Manager Section & Operation Permissions:'
+                            : 'Assigned Section & Operation Permissions:'}
                         </p>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setNewPerms(['liquid.store'])}
+                            onClick={() => setNewPerms(VIEW_ONLY_PERMS)}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 cursor-pointer"
+                          >
+                            View Only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewPerms(['liquid.view', 'liquid.store', 'liquid.materials'])}
                             className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 cursor-pointer"
                           >
                             Liquid Store Only
@@ -684,7 +757,9 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setNewPerms(DEFAULT_USER_PERMS)}
+                            onClick={() =>
+                              setNewPerms(newRoleName === 'mmd_manager' ? DEFAULT_MMD_MANAGER_PERMS : DEFAULT_USER_PERMS)
+                            }
                             className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 cursor-pointer"
                           >
                             Reset Standard
@@ -702,6 +777,30 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               checked={newPerms.includes(perm.key)}
                               onChange={() => togglePerm(newPerms, setNewPerms, perm.key)}
                               className="w-3.5 h-3.5 rounded border-neutral-300 text-blue-600"
+                            />
+                            <span>{perm.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {newRoleName === 'view_only' && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2">
+                      <p className="text-[11px] font-bold text-purple-900">
+                        View Only Access Scope (Read-Only Monitoring & Reporting — Create / Edit / Delete Disabled):
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {VIEW_ONLY_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                          <label
+                            key={perm.key}
+                            className="flex items-center gap-2 text-xs text-purple-950 cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={newPerms.includes(perm.key)}
+                              onChange={() => togglePerm(newPerms, setNewPerms, perm.key)}
+                              className="w-3.5 h-3.5 rounded border-purple-400 text-purple-600"
                             />
                             <span>{perm.label}</span>
                           </label>
@@ -914,6 +1013,10 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 className={`inline-block px-2 py-0.5 rounded-lg text-[11px] font-bold border ${
                                   u.roleName === 'admin'
                                     ? 'bg-indigo-50 text-indigo-900 border-indigo-200'
+                                    : u.roleName === 'mmd_manager'
+                                    ? 'bg-teal-50 text-teal-900 border-teal-200'
+                                    : u.roleName === 'view_only'
+                                    ? 'bg-purple-50 text-purple-900 border-purple-200'
                                     : u.roleName === 'forklift_operator'
                                     ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                                     : u.roleName === 'liquid_store_operator'
@@ -1142,10 +1245,21 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                 setEditPerms(DEFAULT_LIQUID_STORE_PERMS);
                               } else if (nextRole === 'ex_factory_operator') {
                                 setEditPerms(DEFAULT_EX_FACTORY_PERMS);
+                              } else if (nextRole === 'mmd_manager' && editingUser.roleName !== 'mmd_manager') {
+                                setEditPerms(DEFAULT_MMD_MANAGER_PERMS);
+                              } else if (nextRole === 'view_only') {
+                                setEditPerms(
+                                  editingUser.roleName === 'view_only'
+                                    ? editingUser.permissions || VIEW_ONLY_PERMS
+                                    : VIEW_ONLY_PERMS
+                                );
                               } else if (nextRole === 'user' && editingUser.roleName !== 'user') {
                                 setEditPerms(DEFAULT_USER_PERMS);
-                              } else if (nextRole === 'user') {
-                                setEditPerms(editingUser.permissions || DEFAULT_USER_PERMS);
+                              } else if (nextRole === 'user' || nextRole === 'mmd_manager') {
+                                setEditPerms(
+                                  editingUser.permissions ||
+                                    (nextRole === 'mmd_manager' ? DEFAULT_MMD_MANAGER_PERMS : DEFAULT_USER_PERMS)
+                                );
                               }
                             }}
                             className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-neutral-300 bg-white disabled:opacity-60"
@@ -1159,6 +1273,8 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                             ) : (
                               <>
                                 <option value="user">User / Operator (user)</option>
+                                <option value="mmd_manager">MMD Manager (mmd_manager)</option>
+                                <option value="view_only">View Only (view_only)</option>
                                 <option value="forklift_operator">Forklift Operator (forklift_operator)</option>
                                 <option value="liquid_store_operator">Liquid Store Operator (liquid_store_operator)</option>
                                 <option value="ex_factory_operator">Ex-Factory Operator (ex_factory_operator)</option>
@@ -1182,16 +1298,25 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       </div>
 
-                      {editRoleName === 'user' ? (
+                      {editRoleName === 'user' || editRoleName === 'mmd_manager' ? (
                         <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-3 space-y-2">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-[11px] font-bold text-neutral-800">
-                              Granular Access Permissions
+                              {editRoleName === 'mmd_manager'
+                                ? 'MMD Manager Access Permissions'
+                                : 'Granular Access Permissions'}
                             </p>
                             <div className="flex flex-wrap items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => setEditPerms(['liquid.store'])}
+                                onClick={() => setEditPerms(VIEW_ONLY_PERMS)}
+                                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 cursor-pointer"
+                              >
+                                View Only
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditPerms(['liquid.view', 'liquid.store', 'liquid.materials'])}
                                 className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 cursor-pointer"
                               >
                                 Liquid Store Only
@@ -1205,7 +1330,11 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setEditPerms(DEFAULT_USER_PERMS)}
+                                onClick={() =>
+                                  setEditPerms(
+                                    editRoleName === 'mmd_manager' ? DEFAULT_MMD_MANAGER_PERMS : DEFAULT_USER_PERMS
+                                  )
+                                }
                                 className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white hover:bg-neutral-100 text-neutral-700 border border-neutral-200 cursor-pointer"
                               >
                                 Reset Standard
@@ -1223,6 +1352,28 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                                   checked={editPerms.includes(perm.key)}
                                   onChange={() => togglePerm(editPerms, setEditPerms, perm.key)}
                                   className="w-3.5 h-3.5 rounded border-neutral-300 text-blue-600"
+                                />
+                                <span>{perm.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : editRoleName === 'view_only' ? (
+                        <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2">
+                          <p className="text-[11px] font-bold text-purple-900">
+                            View Only Permissions (Read-Only Monitoring — Create / Edit / Delete Disabled)
+                          </p>
+                          <div className="space-y-1.5">
+                            {VIEW_ONLY_ASSIGNABLE_PERMISSIONS.map((perm) => (
+                              <label
+                                key={perm.key}
+                                className="flex items-center gap-2 text-xs text-purple-950 cursor-pointer select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editPerms.includes(perm.key)}
+                                  onChange={() => togglePerm(editPerms, setEditPerms, perm.key)}
+                                  className="w-3.5 h-3.5 rounded border-purple-400 text-purple-600"
                                 />
                                 <span>{perm.label}</span>
                               </label>
@@ -1306,7 +1457,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
                       ) : (
                         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-xs text-indigo-900">
-                          Administrators automatically have full permissions ({permissionsMeta.length || 16} capabilities) across all sections.
+                          Administrators automatically have full permissions ({permissionsMeta.length || 20} capabilities) across all sections.
                         </div>
                       )}
 

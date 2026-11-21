@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TicketRecord, TruckStatus } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
+import { resolveLoadingType } from '../utils/loadingType';
 import {
   FileText,
   Printer,
@@ -217,11 +218,27 @@ export const TicketTable: React.FC<TicketTableProps> = ({
                     </p>
                   </td>
 
-                  {/* Destination */}
+                  {/* Destination & Loading Type */}
                   <td className="py-3.5 px-3.5">
-                    <span className="font-bold text-[#1C2833] block text-xs">
-                      {t.destinationPlace || 'N/A'}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-[#1C2833] text-xs">
+                        {t.destinationPlace || 'N/A'}
+                      </span>
+                      {(() => {
+                        const lType = resolveLoadingType(t);
+                        return (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9.5px] font-black uppercase tracking-wide border ${
+                              lType === 'export'
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}
+                          >
+                            {lType === 'export' ? 'Export' : 'Local'}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <span className="text-[11px] text-[#5B738B] truncate max-w-[140px] block mt-0.5">
                       {t.transporterName || 'Self Transport'}
                     </span>

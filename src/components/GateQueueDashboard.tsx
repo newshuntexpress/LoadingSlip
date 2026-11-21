@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TicketRecord, CompanySettings } from '../types';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
+import { resolveLoadingType } from '../utils/loadingType';
 import {
   DoorOpen,
   Truck,
@@ -15,6 +16,8 @@ import {
   Activity,
   XCircle,
   X,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 
 interface GateQueueDashboardProps {
@@ -138,6 +141,7 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
   canPrint = true,
 }) => {
   const [showCancelledModal, setShowCancelledModal] = useState(false);
+  const [truckBreakdownFilter, setTruckBreakdownFilter] = useState<'all' | 'local' | 'export' | null>(null);
 
   const dayTickets = tickets.filter((t) => t.date === date);
 
@@ -147,6 +151,20 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
   const cancelledTickets = dayTickets.filter((t) => t.status === 'cancelled');
   const cancelledCount = cancelledTickets.length;
   const totalActiveTrucks = underLoadingCount + calledCount + waitingCount;
+
+  const loadingScopeTickets = dayTickets.filter((t) => t.status !== 'cancelled');
+  const localLoadingTickets = loadingScopeTickets.filter((t) => resolveLoadingType(t) === 'local');
+  const exportLoadingTickets = loadingScopeTickets.filter((t) => resolveLoadingType(t) === 'export');
+  const localCompletedCount = localLoadingTickets.filter((t) => t.status === 'completed').length;
+  const exportCompletedCount = exportLoadingTickets.filter((t) => t.status === 'completed').length;
+  const localActiveCount = localLoadingTickets.length - localCompletedCount;
+  const exportActiveCount = exportLoadingTickets.length - exportCompletedCount;
+  const modalBreakdownTickets =
+    truckBreakdownFilter === 'local'
+      ? localLoadingTickets
+      : truckBreakdownFilter === 'export'
+      ? exportLoadingTickets
+      : loadingScopeTickets;
 
   const processedTickets = dayTickets.filter((t) => t.status === 'completed');
   const totalProcessedToday = processedTickets.length;
@@ -305,6 +323,90 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
           <div className="p-3.5 bg-gradient-to-b from-[#169A4D] to-[#0D6B34] text-white rounded-xl border border-[#0A572A] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_#084521]">
             <CheckCircle2 className="w-6 h-6" />
           </div>
+        </div>
+      </div>
+
+      {/* Total Number of Truck Loading — Local & Export Summary Panel */}
+      <div className="surface-3d rounded-2xl overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-[#107E3E] via-[#0A6ED1] to-[#4338CA]" />
+        <div className="px-5 py-3.5 grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#D9E3EE] gap-3 md:gap-0">
+          <button
+            type="button"
+            onClick={() => setTruckBreakdownFilter('all')}
+            className="flex items-center justify-between md:pr-6 py-1 md:py-0 text-left hover:bg-[#F4F8FC] rounded-xl px-2 -mx-2 transition cursor-pointer"
+            title="Click to view all loading trucks"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-b from-[#EFF4F9] to-[#DCE6F2] text-[#354A5F] border border-[#BDCAD7] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_3px_0_#A6B8CC]">
+                <Truck className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-extrabold text-[#354A5F] uppercase tracking-wide block">
+                  Total Truck Loading
+                </span>
+                <span className="text-xs text-[#5B738B]">
+                  {totalActiveTrucks} active · {totalProcessedToday} done
+                </span>
+              </div>
+            </div>
+            <span className="text-3xl font-black text-[#1C2833] tabular-nums">
+              {loadingScopeTickets.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTruckBreakdownFilter('local')}
+            className="flex items-center justify-between md:px-6 py-1 md:py-0 text-left hover:bg-[#F1FDF6] rounded-xl px-2 -mx-2 md:mx-0 transition cursor-pointer"
+            title="Click to view Local loading trucks"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-b from-[#EDFCF3] to-[#D4F6E2] text-[#107E3E] border border-[#8AD9AA] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_3px_0_#76C596]">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-extrabold text-[#0D6B34] uppercase tracking-wide block">
+                  Local Truck Loading
+                </span>
+                <span className="text-xs text-[#5B738B]">
+                  {localActiveCount} active · {localCompletedCount} done
+                  {loadingScopeTickets.length > 0
+                    ? ` (${Math.round((localLoadingTickets.length / loadingScopeTickets.length) * 100)}%)`
+                    : ''}
+                </span>
+              </div>
+            </div>
+            <span className="text-3xl font-black text-[#107E3E] tabular-nums">
+              {localLoadingTickets.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTruckBreakdownFilter('export')}
+            className="flex items-center justify-between md:pl-6 py-1 md:py-0 text-left hover:bg-[#EEF2FF] rounded-xl px-2 -mx-2 md:mx-0 transition cursor-pointer"
+            title="Click to view Export loading trucks"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-b from-[#EEF2FF] to-[#DDE4FF] text-[#4338CA] border border-[#A5B4FC] shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_3px_0_#818CF8]">
+                <Globe className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-extrabold text-[#3730A3] uppercase tracking-wide block">
+                  Export Truck Loading
+                </span>
+                <span className="text-xs text-[#5B738B]">
+                  {exportActiveCount} active · {exportCompletedCount} done
+                  {loadingScopeTickets.length > 0
+                    ? ` (${Math.round((exportLoadingTickets.length / loadingScopeTickets.length) * 100)}%)`
+                    : ''}
+                </span>
+              </div>
+            </div>
+            <span className="text-3xl font-black text-[#4338CA] tabular-nums">
+              {exportLoadingTickets.length}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -625,6 +727,170 @@ export const GateQueueDashboard: React.FC<GateQueueDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCancelledModal(false)}
+                className="app-btn bg-[#354A5F] hover:bg-[#243647] text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Local / Export / Total Truck Loading Drilldown Modal */}
+      {truckBreakdownFilter && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="surface-3d bg-white rounded-2xl w-full max-w-3xl overflow-hidden border border-[#C6D4E3]">
+            <div className="bg-gradient-to-b from-[#354A5F] to-[#243647] text-white px-5 py-4 flex items-center justify-between border-b border-[#1A2633]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/15 rounded-xl border border-white/25">
+                  {truckBreakdownFilter === 'export' ? (
+                    <Globe className="w-5 h-5 text-[#A5B4FC]" />
+                  ) : truckBreakdownFilter === 'local' ? (
+                    <MapPin className="w-5 h-5 text-[#68D391]" />
+                  ) : (
+                    <Truck className="w-5 h-5 text-[#F0AB00]" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-wide">
+                    {truckBreakdownFilter === 'local'
+                      ? `Local Truck Loading (${localLoadingTickets.length})`
+                      : truckBreakdownFilter === 'export'
+                      ? `Export Truck Loading (${exportLoadingTickets.length})`
+                      : `Total Truck Loading (${loadingScopeTickets.length})`}
+                  </h3>
+                  <p className="text-xs text-[#DCE7F2]">
+                    {date} · Local: {localLoadingTickets.length} | Export: {exportLoadingTickets.length}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTruckBreakdownFilter(null)}
+                className="p-1.5 rounded-lg text-[#DCE7F2] hover:text-white hover:bg-white/10 transition cursor-pointer"
+                aria-label="Close truck loading breakdown"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-5 pt-3 pb-2 bg-[#EFF4F9] border-b border-[#DCE5EE] flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTruckBreakdownFilter('all')}
+                className={`app-btn-sm ${
+                  truckBreakdownFilter === 'all'
+                    ? 'bg-[#354A5F] text-white'
+                    : 'bg-white text-[#354A5F] border border-[#BCC8D4]'
+                }`}
+              >
+                All ({loadingScopeTickets.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTruckBreakdownFilter('local')}
+                className={`app-btn-sm ${
+                  truckBreakdownFilter === 'local'
+                    ? 'bg-[#107E3E] text-white'
+                    : 'bg-white text-[#107E3E] border border-[#ABE2C2]'
+                }`}
+              >
+                Local ({localLoadingTickets.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTruckBreakdownFilter('export')}
+                className={`app-btn-sm ${
+                  truckBreakdownFilter === 'export'
+                    ? 'bg-[#4338CA] text-white'
+                    : 'bg-white text-[#4338CA] border border-[#C7D2FE]'
+                }`}
+              >
+                Export ({exportLoadingTickets.length})
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 max-h-[62vh] overflow-y-auto space-y-2.5 bg-[#F8FAFC]">
+              {modalBreakdownTickets.length === 0 ? (
+                <div className="inset-3d bg-white border border-dashed border-[#CBD8E6] rounded-xl p-8 text-center">
+                  <Truck className="w-8 h-8 text-[#9DB0C3] mx-auto mb-2" />
+                  <p className="text-sm font-bold text-[#354A5F]">No Trucks Found</p>
+                  <p className="text-xs text-[#5B738B] mt-0.5">
+                    0 {truckBreakdownFilter === 'all' ? '' : `${truckBreakdownFilter} `}trucks recorded for {date}.
+                  </p>
+                </div>
+              ) : (
+                modalBreakdownTickets.map((t, idx) => {
+                  const lType = resolveLoadingType(t);
+                  return (
+                    <div
+                      key={t.id}
+                      className="bg-white border border-[#DCE5EE] rounded-xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md bg-[#EFF4F9] text-[#354A5F] font-black text-[11px] tabular-nums">
+                            #{idx + 1}
+                          </span>
+                          <span className="text-sm font-black text-[#1C2833] tracking-wide">
+                            {t.truckNumber}
+                          </span>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#EBF5FF] text-[#0854A0] border border-[#B8DCFF] font-mono">
+                            {t.ticketNumber}
+                          </span>
+                          <span
+                            className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                              lType === 'export'
+                                ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}
+                          >
+                            {lType === 'export' ? 'Export' : 'Local'}
+                          </span>
+                          {t.delNoteNumber && (
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono">
+                              DN: {t.delNoteNumber}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-[#475E75] flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                          <span>
+                            <strong className="text-[#1C2833]">Gate:</strong> {t.gateNumber}
+                          </span>
+                          <span>
+                            <strong className="text-[#1C2833]">Destination:</strong> {t.destinationPlace || '—'}
+                          </span>
+                          <span>
+                            <strong className="text-[#1C2833]">Driver:</strong> {t.driverName || '—'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-left sm:text-right shrink-0">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            t.status === 'completed'
+                              ? 'bg-[#F1FDF6] text-[#107E3E] border-[#ABE2C2]'
+                              : t.status === 'under_loading'
+                              ? 'bg-[#FEF7F1] text-[#A64B00] border-[#F9C99B]'
+                              : 'bg-[#EBF5FF] text-[#0854A0] border-[#B8DCFF]'
+                          }`}
+                        >
+                          {t.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </span>
+                        <p className="text-[11px] text-[#5B738B] mt-1 tabular-nums">
+                          {t.timeIn || '—'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="px-5 py-3 bg-white border-t border-[#DCE5EE] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setTruckBreakdownFilter(null)}
                 className="app-btn bg-[#354A5F] hover:bg-[#243647] text-white"
               >
                 Close

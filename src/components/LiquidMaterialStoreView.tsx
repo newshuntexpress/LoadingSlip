@@ -45,6 +45,8 @@ import {
 interface LiquidMaterialStoreViewProps {
   currentUser: AuthUser;
   companyLogoUrl?: string;
+  canManageStore?: boolean;
+  canManageMaterials?: boolean;
 }
 
 type LiquidSubTab = 'dashboard' | 'tanks' | 'inward' | 'outward' | 'history' | 'reports' | 'settings';
@@ -116,6 +118,8 @@ function computeClientPreviewTank(
 export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = ({
   currentUser,
   companyLogoUrl,
+  canManageStore = true,
+  canManageMaterials = true,
 }) => {
   const [store, setStore] = useState<LiquidStoreState | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -885,22 +889,26 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
         </div>
 
         <div className="flex items-center gap-1.5 print:hidden">
-          <button
-            type="button"
-            onClick={() => openTxModal('INWARD', tank.id)}
-            className="app-btn-sm bg-emerald-600 hover:bg-emerald-500 text-white"
-          >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span>Inward</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openTxModal('OUTWARD', tank.id)}
-            className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
-          >
-            <Minus className="w-3.5 h-3.5 shrink-0" />
-            <span>Outward</span>
-          </button>
+          {canManageStore && (
+            <>
+              <button
+                type="button"
+                onClick={() => openTxModal('INWARD', tank.id)}
+                className="app-btn-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+              >
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span>Inward</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openTxModal('OUTWARD', tank.id)}
+                className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
+              >
+                <Minus className="w-3.5 h-3.5 shrink-0" />
+                <span>Outward</span>
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setDetailTankId(tank.id)}
@@ -1043,23 +1051,31 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => handleThemeToggle(isDark ? 'light' : 'dark')}
-            className={`app-btn border ${
-              isDark
-                ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                : 'bg-white hover:bg-[#EFF4F9] border-[#BCC8D4] text-[#354A5F]'
-            }`}
-            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {isDark ? <Sun className="w-4 h-4 text-[#F0AB00] shrink-0" /> : <Moon className="w-4 h-4 text-[#354A5F] shrink-0" />}
-            <span>{isDark ? 'Light' : 'Dark'}</span>
-          </button>
+          {!canManageStore && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span>View Only</span>
+            </span>
+          )}
+          {canManageStore && (
+            <button
+              type="button"
+              onClick={() => handleThemeToggle(isDark ? 'light' : 'dark')}
+              className={`app-btn border ${
+                isDark
+                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                  : 'bg-white hover:bg-[#EFF4F9] border-[#BCC8D4] text-[#354A5F]'
+              }`}
+              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {isDark ? <Sun className="w-4 h-4 text-[#F0AB00] shrink-0" /> : <Moon className="w-4 h-4 text-[#354A5F] shrink-0" />}
+              <span>{isDark ? 'Light' : 'Dark'}</span>
+            </button>
+          )}
 
           <button
             type="button"
-            onClick={loadState}
+            onClick={() => loadState(false)}
             className={`app-btn border ${
               isDark
                 ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
@@ -1070,23 +1086,27 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
             <span>Sync</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => openTxModal('INWARD')}
-            className="app-btn bg-[#107E3E] hover:bg-[#0D6B34] text-white"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>Inward Entry</span>
-          </button>
+          {canManageStore && (
+            <>
+              <button
+                type="button"
+                onClick={() => openTxModal('INWARD')}
+                className="app-btn bg-[#107E3E] hover:bg-[#0D6B34] text-white"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Inward Entry</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => openTxModal('OUTWARD')}
-            className="app-btn bg-[#BB0000] hover:bg-[#9E0000] text-white"
-          >
-            <Minus className="w-4 h-4 shrink-0" />
-            <span>Outward Entry</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => openTxModal('OUTWARD')}
+                className="app-btn bg-[#BB0000] hover:bg-[#9E0000] text-white"
+              >
+                <Minus className="w-4 h-4 shrink-0" />
+                <span>Outward Entry</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1503,14 +1523,16 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                   <Printer className="w-3.5 h-3.5 shrink-0" />
                   <span>Print</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => openTankModal()}
-                  className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
-                >
-                  <Plus className="w-4 h-4 shrink-0" />
-                  <span>Add New Tank</span>
-                </button>
+                {canManageStore && (
+                  <button
+                    type="button"
+                    onClick={() => openTankModal()}
+                    className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
+                  >
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <span>Add New Tank</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1574,24 +1596,28 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                               <Eye className="w-3 h-3 shrink-0" />
                               <span>View</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => openTankModal(t)}
-                              className={`app-btn-sm border ${
-                                isDark
-                                  ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                                  : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                              }`}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTank(t)}
-                              className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
-                            >
-                              Delete
-                            </button>
+                            {canManageStore && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openTankModal(t)}
+                                  className={`app-btn-sm border ${
+                                    isDark
+                                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                                      : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                  }`}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTank(t)}
+                                  className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1615,7 +1641,7 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                   : 'Transaction History & Audit Trail'}
               </h3>
               <div className="flex flex-wrap items-center gap-2 print:hidden">
-                {subTab !== 'outward' && (
+                {canManageStore && subTab !== 'outward' && (
                   <button
                     type="button"
                     onClick={() => openTxModal('INWARD')}
@@ -1625,7 +1651,7 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                     <span>Add Inward</span>
                   </button>
                 )}
-                {subTab !== 'inward' && (
+                {canManageStore && subTab !== 'inward' && (
                   <button
                     type="button"
                     onClick={() => openTxModal('OUTWARD')}
@@ -1920,26 +1946,30 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                                       <Eye className="w-3 h-3 shrink-0" />
                                       <span>View</span>
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => openTxModal(tx.type, tx.tankId, tx)}
-                                      className={`app-btn-sm border ${
-                                        isDark
-                                          ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                                          : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                                      }`}
-                                    >
-                                      <Edit2 className="w-3 h-3 shrink-0" />
-                                      <span>Edit</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteTx(tx)}
-                                      className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
-                                    >
-                                      <Trash2 className="w-3 h-3 shrink-0" />
-                                      <span>Delete</span>
-                                    </button>
+                                    {canManageStore && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openTxModal(tx.type, tx.tankId, tx)}
+                                          className={`app-btn-sm border ${
+                                            isDark
+                                              ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                                              : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                          }`}
+                                        >
+                                          <Edit2 className="w-3 h-3 shrink-0" />
+                                          <span>Edit</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteTx(tx)}
+                                          className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
+                                        >
+                                          <Trash2 className="w-3 h-3 shrink-0" />
+                                          <span>Delete</span>
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -2202,71 +2232,73 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
           <div className="max-w-4xl space-y-5">
             <h3 className="text-lg font-extrabold">Store Settings & Material Master Data</h3>
 
-            <form onSubmit={handleSaveSettings} className={`rounded-2xl border p-5 space-y-4 ${cardCls}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-sm font-extrabold">Camp Store Facility Configuration</h4>
-                <div className={`inline-flex gap-1 p-1 rounded-xl border ${altBoxCls}`}>
+            {canManageStore && (
+              <form onSubmit={handleSaveSettings} className={`rounded-2xl border p-5 space-y-4 ${cardCls}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-extrabold">Camp Store Facility Configuration</h4>
+                  <div className={`inline-flex gap-1 p-1 rounded-xl border ${altBoxCls}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleThemeToggle('light')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
+                        !isDark ? 'bg-white text-slate-900 shadow-xs' : mutedCls
+                      }`}
+                    >
+                      Light
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleThemeToggle('dark')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
+                        isDark ? 'bg-slate-900 text-white shadow-xs' : mutedCls
+                      }`}
+                    >
+                      Dark
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold mb-1">Facility / Camp Store Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={facilityInput}
+                      onChange={(e) => setFacilityInput(e.target.value)}
+                      className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 ${inputCls}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold mb-1">Signed-In Operator</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={`${currentUser.fullName} (${currentUser.roleDisplayName})`}
+                      className={`w-full px-3 py-2 text-xs rounded-xl border opacity-75 ${inputCls}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-between items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => handleThemeToggle('light')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-                      !isDark ? 'bg-white text-slate-900 shadow-xs' : mutedCls
-                    }`}
+                    onClick={handleResetDefault}
+                    className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
                   >
-                    Light
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                    <span>Reset Default Data</span>
                   </button>
                   <button
-                    type="button"
-                    onClick={() => handleThemeToggle('dark')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-                      isDark ? 'bg-slate-900 text-white shadow-xs' : mutedCls
-                    }`}
+                    type="submit"
+                    disabled={submitting}
+                    className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
                   >
-                    Dark
+                    Save Settings
                   </button>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Facility / Camp Store Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={facilityInput}
-                    onChange={(e) => setFacilityInput(e.target.value)}
-                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 ${inputCls}`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">Signed-In Operator</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={`${currentUser.fullName} (${currentUser.roleDisplayName})`}
-                    className={`w-full px-3 py-2 text-xs rounded-xl border opacity-75 ${inputCls}`}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap justify-between items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleResetDefault}
-                  className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                  <span>Reset Default Data</span>
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
-                >
-                  Save Settings
-                </button>
-              </div>
-            </form>
+              </form>
+            )}
 
             <div className={`rounded-2xl border p-5 space-y-4 ${cardCls}`}>
               <h4 className="text-sm font-extrabold">Material Master Data (Create / Edit / Delete)</h4>
@@ -2339,31 +2371,35 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                             <td className="py-2.5 px-3 font-mono whitespace-nowrap">{m.code}</td>
                             <td className={`py-2.5 px-3 ${mutedCls}`}>{m.description || '-'}</td>
                             <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                              <div className="inline-flex gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingMatId(m.id);
-                                    setEditMatName(m.name);
-                                    setEditMatCode(m.code);
-                                    setEditMatDesc(m.description || '');
-                                  }}
-                                  className={`app-btn-sm border ${
-                                    isDark
-                                      ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
-                                      : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                                  }`}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteMaterial(m)}
-                                  className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              {canManageMaterials ? (
+                                <div className="inline-flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingMatId(m.id);
+                                      setEditMatName(m.name);
+                                      setEditMatCode(m.code);
+                                      setEditMatDesc(m.description || '');
+                                    }}
+                                    className={`app-btn-sm border ${
+                                      isDark
+                                        ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                                        : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                    }`}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteMaterial(m)}
+                                    className="app-btn-sm bg-red-600 hover:bg-red-500 text-white"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className={`text-[11px] italic ${mutedCls}`}>View only</span>
+                              )}
                             </td>
                           </tr>
                         )
@@ -2373,41 +2409,43 @@ export const LiquidMaterialStoreView: React.FC<LiquidMaterialStoreViewProps> = (
                 </div>
               </div>
 
-              <form
-                onSubmit={handleAddMaterial}
-                className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_2fr_auto] gap-2"
-              >
-                <input
-                  type="text"
-                  required
-                  value={newMatName}
-                  onChange={(e) => setNewMatName(e.target.value)}
-                  placeholder="Material Name (e.g. FURNACE OIL)"
-                  className={`px-3 py-2 text-xs rounded-xl border uppercase ${inputCls}`}
-                />
-                <input
-                  type="text"
-                  value={newMatCode}
-                  onChange={(e) => setNewMatCode(e.target.value)}
-                  placeholder="Code"
-                  className={`px-3 py-2 text-xs rounded-xl border uppercase font-mono ${inputCls}`}
-                />
-                <input
-                  type="text"
-                  value={newMatDesc}
-                  onChange={(e) => setNewMatDesc(e.target.value)}
-                  placeholder="Description (optional)"
-                  className={`px-3 py-2 text-xs rounded-xl border ${inputCls}`}
-                />
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
+              {canManageMaterials && (
+                <form
+                  onSubmit={handleAddMaterial}
+                  className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_2fr_auto] gap-2"
                 >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span>Add Material</span>
-                </button>
-              </form>
+                  <input
+                    type="text"
+                    required
+                    value={newMatName}
+                    onChange={(e) => setNewMatName(e.target.value)}
+                    placeholder="Material Name (e.g. FURNACE OIL)"
+                    className={`px-3 py-2 text-xs rounded-xl border uppercase ${inputCls}`}
+                  />
+                  <input
+                    type="text"
+                    value={newMatCode}
+                    onChange={(e) => setNewMatCode(e.target.value)}
+                    placeholder="Code"
+                    className={`px-3 py-2 text-xs rounded-xl border uppercase font-mono ${inputCls}`}
+                  />
+                  <input
+                    type="text"
+                    value={newMatDesc}
+                    onChange={(e) => setNewMatDesc(e.target.value)}
+                    placeholder="Description (optional)"
+                    className={`px-3 py-2 text-xs rounded-xl border ${inputCls}`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="app-btn bg-sky-600 hover:bg-sky-500 text-white"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span>Add Material</span>
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         )}

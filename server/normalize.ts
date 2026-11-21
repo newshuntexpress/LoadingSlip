@@ -16,6 +16,13 @@ function trimStr(val: unknown): string {
   return String(val ?? '').trim();
 }
 
+export function normalizeLoadingType(val: unknown): 'local' | 'export' | undefined {
+  const upper = upperStr(val);
+  if (upper === 'EXPORT') return 'export';
+  if (upper === 'LOCAL') return 'local';
+  return undefined;
+}
+
 export function normalizeLoadingSlip<T extends Record<string, any> | undefined>(slip: T): T {
   if (!slip || typeof slip !== 'object') return slip;
   const items = Array.isArray(slip.items)
@@ -64,6 +71,9 @@ export function normalizeTicketRecord<T extends Record<string, any>>(ticket: T):
     ...(ticket.iqamaNumber !== undefined ? { iqamaNumber: upperStr(ticket.iqamaNumber) } : {}),
     ...(ticket.transporterName !== undefined ? { transporterName: upperStr(ticket.transporterName) } : {}),
     ...(ticket.destinationPlace !== undefined ? { destinationPlace: upperStr(ticket.destinationPlace) } : {}),
+    ...(normalizeLoadingType(ticket.loadingType) !== undefined
+      ? { loadingType: normalizeLoadingType(ticket.loadingType) }
+      : {}),
     ...(ticket.gateNumber !== undefined ? { gateNumber: trimStr(ticket.gateNumber) } : {}),
     ...(ticket.remarks !== undefined ? { remarks: upperStr(ticket.remarks) } : {}),
     ...(ticket.timeIn !== undefined ? { timeIn: trimStr(ticket.timeIn) } : {}),
