@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import { AuthUser, CompanySettings, DriverMasterRecord, ExFactoryEntry, TicketRecord, TruckLoadingType } from '../types';
 import { ApiClient, withBackgroundPoll } from '../services/api';
-import { formatDisplayDate, getTodayDateString, StorageService } from '../services/storage';
+import { formatDisplayDate, getTodayDateString } from '../services/storage';
 import { drawPdfLogo } from '../utils/logo';
 import { resolveLoadingType } from '../utils/loadingType';
 import { LoadingSlipModal } from './LoadingSlipModal';
@@ -439,33 +439,18 @@ export const ExFactoryView: React.FC<ExFactoryViewProps> = ({
     if (!activeEntryForSlip || !updatedTicket.loadingSlip) return;
     const targetSrNo = activeEntryForSlip.srNo;
     try {
-      const { entry: updatedEntry, autoSavedMaterials } =
-        await ApiClient.saveExFactoryLoadingSlipWithResult(activeEntryForSlip.entry.id, {
-          loadingSlip: updatedTicket.loadingSlip,
-          truckNumber: updatedTicket.truckNumber,
-          driverName: updatedTicket.driverName,
-          mobileNumber: updatedTicket.driverPhone,
-        });
-      if (autoSavedMaterials && autoSavedMaterials.length > 0) {
-        const cached = StorageService.getMaterials();
-        const map = new Map(cached.map((m) => [m.materialName.trim().toUpperCase(), m]));
-        for (const added of autoSavedMaterials) {
-          map.set(added.materialName.trim().toUpperCase(), added);
-        }
-        StorageService.saveMaterials(
-          Array.from(map.values()).sort((a, b) => a.materialName.localeCompare(b.materialName))
-        );
-      }
+      const updatedEntry = await ApiClient.saveExFactoryLoadingSlip(activeEntryForSlip.entry.id, {
+        loadingSlip: updatedTicket.loadingSlip,
+        truckNumber: updatedTicket.truckNumber,
+        driverName: updatedTicket.driverName,
+        mobileNumber: updatedTicket.driverPhone,
+      });
       setEntries((prev) => prev.map((item) => (item.id === updatedEntry.id ? updatedEntry : item)));
       setLastSavedEntry((prev) => (prev?.id === updatedEntry.id ? updatedEntry : prev));
       setActiveEntryForSlip(null);
-      const autoSavedSuffix =
-        autoSavedMaterials && autoSavedMaterials.length > 0
-          ? ` | Auto-saved to Material Master: ${autoSavedMaterials.map((m) => m.materialName).join(', ')}`
-          : '';
       showToast(
         'success',
-        `Loading Slip saved for ${updatedEntry.delNoteNumber} (${updatedEntry.loadingSlip?.totalQty || 0} Qty · ${updatedEntry.loadingSlip?.totalPallets || 0} Pallets)${autoSavedSuffix}`
+        `Loading Slip saved for ${updatedEntry.delNoteNumber} (${updatedEntry.loadingSlip?.totalQty || 0} Qty · ${updatedEntry.loadingSlip?.totalPallets || 0} Pallets)`
       );
       if (openPrintDirectly) {
         setActiveEntryForPrintSlip({ entry: updatedEntry, srNo: targetSrNo });

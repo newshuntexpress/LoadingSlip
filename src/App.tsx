@@ -6,7 +6,6 @@ import {
   TruckStatus,
   AuthUser,
   LoadingAlertNotification,
-  MaterialMasterRecord,
 } from './types';
 import {
   StorageService,
@@ -22,7 +21,6 @@ import { ForkliftLoadingView } from './components/ForkliftLoadingView';
 import { LiquidMaterialStoreView } from './components/LiquidMaterialStoreView';
 import { ExFactoryView } from './components/ExFactoryView';
 import { DispatchDetailsView } from './components/DispatchDetailsView';
-import { MaterialMasterView } from './components/MaterialMasterView';
 import { NewTicketModal } from './components/NewTicketModal';
 import { EditTicketModal } from './components/EditTicketModal';
 import { LoadingSlipModal } from './components/LoadingSlipModal';
@@ -70,7 +68,6 @@ import {
   MoreVertical,
   FileText,
   RefreshCw,
-  Layers,
 } from 'lucide-react';
 
 type AppTab =
@@ -78,7 +75,6 @@ type AppTab =
   | 'list'
   | 'dispatch'
   | 'material_register'
-  | 'material_master'
   | 'forklift'
   | 'liquid'
   | 'exfactory';
@@ -88,7 +84,6 @@ const ALLOWED_APP_TABS: ReadonlyArray<AppTab> = [
   'list',
   'dispatch',
   'material_register',
-  'material_master',
   'forklift',
   'liquid',
   'exfactory',
@@ -102,7 +97,6 @@ function getDefaultTabForUser(user: AuthUser): AppTab {
   const hasTickets = perms.includes('tickets.view');
   const hasDispatch = perms.includes('dispatch.view');
   const hasMaterialReg = perms.includes('material_register.view');
-  const hasMaterialMaster = perms.includes('materials.view') || perms.includes('materials.manage');
   const hasLiquid =
     perms.includes('liquid.store') || perms.includes('liquid.view') || perms.includes('liquid.materials');
   const hasExFactory = perms.some((p) => p.startsWith('ex_factory.'));
@@ -110,7 +104,6 @@ function getDefaultTabForUser(user: AuthUser): AppTab {
     hasTickets ||
     hasDispatch ||
     hasMaterialReg ||
-    hasMaterialMaster ||
     perms.includes('reports.view') ||
     perms.includes('drivers.manage') ||
     perms.includes('settings.manage');
@@ -130,7 +123,6 @@ function getDefaultTabForUser(user: AuthUser): AppTab {
   if (hasTickets) return 'dashboard';
   if (hasDispatch) return 'dispatch';
   if (hasMaterialReg) return 'material_register';
-  if (hasMaterialMaster) return 'material_master';
   if (hasExFactory) return 'exfactory';
   if (hasLiquid) return 'liquid';
   if (perms.includes('forklift.operate')) return 'forklift';
@@ -166,7 +158,6 @@ export default function App() {
   // App Data State
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
   const [tickets, setTickets] = useState<TicketRecord[]>([]);
-  const [materials, setMaterials] = useState<MaterialMasterRecord[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState<LoadingAlertNotification[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(() => StorageService.getSettings());
   const [publicBranding, setPublicBranding] = useState<PublicBranding | null>(null);
@@ -182,7 +173,6 @@ export default function App() {
     return 'dashboard';
   });
   const [appError, setAppError] = useState<string | null>(null);
-  const [materialAutoSaveMsg, setMaterialAutoSaveMsg] = useState<string | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -290,16 +280,6 @@ export default function App() {
     !isLiquidStoreRole &&
     !isExFactoryRole &&
     (isAdmin || hasPerm('material_register.view'));
-  const hasMaterialMasterViewPerm =
-    !isForkliftOperator &&
-    !isLiquidStoreRole &&
-    !isExFactoryRole &&
-    (isAdmin || hasPerm('materials.view') || hasPerm('materials.manage'));
-  const hasMaterialMasterManagePerm =
-    !isForkliftOperator &&
-    !isLiquidStoreRole &&
-    !isExFactoryRole &&
-    (isAdmin || hasPerm('materials.manage'));
 
   const isLiquidStoreOnly =
     Boolean(currentUser) &&
@@ -319,8 +299,7 @@ export default function App() {
         !canViewReports &&
         !canManageSettings &&
         !hasDispatchViewPerm &&
-        !hasMaterialRegisterViewPerm &&
-        !hasMaterialMasterViewPerm));
+        !hasMaterialRegisterViewPerm));
 
   const isExFactoryOnly =
     Boolean(currentUser) &&
@@ -340,8 +319,7 @@ export default function App() {
         !canViewReports &&
         !canManageSettings &&
         !hasDispatchViewPerm &&
-        !hasMaterialRegisterViewPerm &&
-        !hasMaterialMasterViewPerm));
+        !hasMaterialRegisterViewPerm));
 
   const canViewDispatchDetails =
     !isForkliftOperator &&
@@ -354,18 +332,6 @@ export default function App() {
     !isLiquidStoreOnly &&
     !isExFactoryOnly &&
     hasMaterialRegisterViewPerm;
-
-  const canViewMaterialMaster =
-    !isForkliftOperator &&
-    !isLiquidStoreOnly &&
-    !isExFactoryOnly &&
-    hasMaterialMasterViewPerm;
-
-  const canManageMaterialMaster =
-    !isForkliftOperator &&
-    !isLiquidStoreOnly &&
-    !isExFactoryOnly &&
-    hasMaterialMasterManagePerm;
 
   // Clear all sensitive state immediately upon logout or unauthorized error
   const clearSessionState = useCallback(() => {
@@ -380,7 +346,6 @@ export default function App() {
       // Ignore
     }
     setTickets([]);
-    setMaterials([]);
     setLoadingAlerts([]);
     setShowNewTicketModal(false);
     setActiveTicketForSlip(null);
@@ -433,19 +398,6 @@ export default function App() {
         userPerms.includes('ex_factory.view') ||
         userPerms.includes('ex_factory.create') ||
         userPerms.includes('ex_factory.update'));
-    const userCanFetchMaterials =
-      !forkliftOnly &&
-      currentUser?.roleName !== 'liquid_store_operator' &&
-      (userIsAdmin ||
-        userPerms.includes('materials.view') ||
-        userPerms.includes('materials.manage') ||
-        userPerms.includes('tickets.view') ||
-        userPerms.includes('tickets.update') ||
-        userPerms.includes('dispatch.view') ||
-        userPerms.includes('material_register.view') ||
-        userPerms.includes('ex_factory.view') ||
-        userPerms.includes('ex_factory.create') ||
-        userPerms.includes('ex_factory.update'));
 
     const markAsBackgroundPoll =
       isBackgroundPoll && Date.now() - lastUserActivityRef.current >= 60_000;
@@ -462,23 +414,18 @@ export default function App() {
           !forkliftOnly && userCanViewTickets
             ? ApiClient.getWhatsAppLogs().catch(() => [])
             : Promise.resolve([]),
-          userCanFetchMaterials
-            ? ApiClient.getMaterials().catch(() => [] as MaterialMasterRecord[])
-            : Promise.resolve([] as MaterialMasterRecord[]),
         ]);
 
-      const [ticketsRes, driversRes, settingsRes, alertsRes, waLogsRes, materialsRes] = markAsBackgroundPoll
+      const [ticketsRes, driversRes, settingsRes, alertsRes, waLogsRes] = markAsBackgroundPoll
         ? await withBackgroundPoll(fetchAll)
         : await fetchAll();
       StorageService.hydrateFromServer({
         tickets: ticketsRes,
         drivers: driversRes,
-        materials: materialsRes,
         settings: settingsRes.settings,
         defaultSettings: settingsRes.defaultSettings,
       });
       setTickets(ticketsRes);
-      setMaterials(materialsRes);
       setLoadingAlerts(alertsRes);
       setWaPendingRetryCount(
         waLogsRes.filter((l) => l.deliveryStatus === 'failed' || l.deliveryStatus === 'skipped').length
@@ -614,7 +561,6 @@ export default function App() {
       (activeTab === 'list' && canViewTickets) ||
       (activeTab === 'dispatch' && canViewDispatchDetails) ||
       (activeTab === 'material_register' && canViewMaterialRegister) ||
-      (activeTab === 'material_master' && canViewMaterialMaster) ||
       (activeTab === 'exfactory' && canAccessExFactory) ||
       (activeTab === 'liquid' && canAccessLiquidStore) ||
       (activeTab === 'forklift' && canOperateForklift);
@@ -626,8 +572,6 @@ export default function App() {
         setActiveTab('dispatch');
       } else if (canViewMaterialRegister) {
         setActiveTab('material_register');
-      } else if (canViewMaterialMaster) {
-        setActiveTab('material_master');
       } else if (canAccessExFactory) {
         setActiveTab('exfactory');
       } else if (canAccessLiquidStore) {
@@ -644,7 +588,6 @@ export default function App() {
     canViewTickets,
     canViewDispatchDetails,
     canViewMaterialRegister,
-    canViewMaterialMaster,
     canAccessExFactory,
     canAccessLiquidStore,
     canOperateForklift,
@@ -1120,29 +1063,10 @@ export default function App() {
   const handleSaveLoadingSlip = async (updatedTicket: TicketRecord, openPrintDirectly?: boolean) => {
     setAppError(null);
     try {
-      const { ticket: saved, whatsappNotification, autoSavedMaterials } = await ApiClient.updateTicketWithNotification(
+      const { ticket: saved, whatsappNotification } = await ApiClient.updateTicketWithNotification(
         updatedTicket.id,
         updatedTicket
       );
-      if (autoSavedMaterials && autoSavedMaterials.length > 0) {
-        setMaterials((prev) => {
-          const map = new Map(prev.map((m) => [m.materialName.trim().toUpperCase(), m]));
-          for (const added of autoSavedMaterials) {
-            map.set(added.materialName.trim().toUpperCase(), added);
-          }
-          const mergedList = Array.from(map.values()).sort((a, b) =>
-            a.materialName.localeCompare(b.materialName)
-          );
-          StorageService.saveMaterials(mergedList);
-          return mergedList;
-        });
-        setMaterialAutoSaveMsg(
-          `Auto-saved ${autoSavedMaterials.length} new material${autoSavedMaterials.length === 1 ? '' : 's'} to Material Master: ${autoSavedMaterials
-            .map((m) => `${m.materialName} (${m.packType}, 1 Pallet = ${m.palletRatio})`)
-            .join(', ')}`
-        );
-        setTimeout(() => setMaterialAutoSaveMsg(null), 7000);
-      }
       setActiveTicketForSlip(null);
       await loadData();
 
@@ -1272,8 +1196,6 @@ export default function App() {
       ? 'Dispatch Details'
       : activeTab === 'material_register'
       ? 'Material Register'
-      : activeTab === 'material_master'
-      ? 'Material Master'
       : activeTab === 'forklift'
       ? `Forklift Loading (${pendingForkliftCount})`
       : activeTab === 'liquid'
@@ -1619,25 +1541,6 @@ export default function App() {
                     </button>
                   )}
 
-                  {canViewMaterialMaster && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('material_master')}
-                      className={`app-btn-sm !h-7 !min-h-[28px] !px-2.5 !text-[11px] !rounded-lg ${
-                        activeTab === 'material_master'
-                          ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white ring-1 ring-red-950'
-                          : '!shadow-none bg-transparent text-[#354A5F] hover:text-red-900 hover:bg-white/80'
-                      }`}
-                    >
-                      <Layers
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          activeTab === 'material_master' ? 'text-white' : 'text-[#0A6ED1]'
-                        }`}
-                      />
-                      <span>Material Master</span>
-                    </button>
-                  )}
-
                   {canOperateForklift && (
                     <button
                       type="button"
@@ -1863,28 +1766,6 @@ export default function App() {
                           }`}
                         />
                         <span>Material Register</span>
-                      </button>
-                    )}
-
-                    {canViewMaterialMaster && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('material_master');
-                          setMobileHeaderMenuOpen(false);
-                        }}
-                        className={`app-btn w-full justify-start ${
-                          activeTab === 'material_master'
-                            ? 'bg-gradient-to-b from-[#B91C1C] to-[#7F1D1D] text-white border border-red-950'
-                            : 'bg-[#2B3E50] hover:bg-[#3A526A] text-[#F4F7FA] border border-[#4A6580]'
-                        }`}
-                      >
-                        <Layers
-                          className={`w-4 h-4 shrink-0 ${
-                            activeTab === 'material_master' ? 'text-white' : 'text-[#68AEFF]'
-                          }`}
-                        />
-                        <span>Material Master</span>
                       </button>
                     )}
 
@@ -2163,26 +2044,6 @@ export default function App() {
           </div>
         )}
 
-        {materialAutoSaveMsg && (
-          <div
-            role="status"
-            className="bg-blue-50 border border-blue-300 text-blue-950 px-4 py-3 rounded-xl text-xs font-bold flex items-center justify-between gap-3 shadow-xs"
-          >
-            <span className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#0A6ED1] shrink-0" />
-              <span>{materialAutoSaveMsg}</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setMaterialAutoSaveMsg(null)}
-              className="p-1 text-blue-700 hover:text-blue-950 cursor-pointer"
-              title="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
         {/* Automatic WhatsApp Notification Status & Retry Banner */}
         {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && waToast && (
           <div
@@ -2323,7 +2184,6 @@ export default function App() {
           canViewTickets &&
           activeTab !== 'dispatch' &&
           activeTab !== 'material_register' &&
-          activeTab !== 'material_master' &&
           activeTab !== 'forklift' &&
           activeTab !== 'liquid' &&
           activeTab !== 'exfactory' && (
@@ -2440,17 +2300,6 @@ export default function App() {
             canAccessExFactory={canAccessExFactory}
             sectionMode="register"
             onRefreshTickets={() => loadData(false)}
-          />
-        )}
-
-        {/* Tab 2D: Material Master (Material Name, Pack Type & Auto-Pallet Ratio) */}
-        {!isForkliftOperator && !isLiquidStoreOnly && !isExFactoryOnly && canViewMaterialMaster && activeTab === 'material_master' && (
-          <MaterialMasterView
-            materials={materials}
-            settings={settings}
-            canManage={canManageMaterialMaster}
-            onMaterialsChange={(next) => setMaterials(next)}
-            onRefresh={() => loadData(false)}
           />
         )}
 
@@ -2571,7 +2420,6 @@ export default function App() {
         <LoadingSlipModal
           ticket={activeTicketForSlip}
           settings={settings}
-          materials={materials}
           currentUserId={currentUser.id}
           storeInchargeFullName={currentUser.fullName}
           storeInchargeSignatureDataUrl={currentUser.signatureDataUrl}

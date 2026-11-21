@@ -10,7 +10,6 @@ import {
   requirePermission,
   requireAnyPermission,
 } from './security.ts';
-import { syncMissingMaterialsFromLoadingSlip } from './materials.ts';
 
 interface DbExFactoryRow {
   id: string;
@@ -290,13 +289,6 @@ exFactoryRouter.put(
 
     const updated = db.prepare(`SELECT * FROM ex_factory_entries WHERE id = ?`).get(id) as DbExFactoryRow;
 
-    const autoSavedMaterials = syncMissingMaterialsFromLoadingSlip(
-      normalizedSlip.items,
-      actor,
-      req.auth!.user.id,
-      getClientIp(req)
-    ).addedMaterials;
-
     logAudit({
       actorUserId: req.auth!.user.id,
       actorUsername: actor,
@@ -307,10 +299,7 @@ exFactoryRouter.put(
       ipAddress: getClientIp(req),
     });
 
-    res.json({
-      entry: mapRow(updated),
-      ...(autoSavedMaterials.length > 0 ? { autoSavedMaterials } : {}),
-    });
+    res.json({ entry: mapRow(updated) });
   }
 );
 

@@ -1,7 +1,6 @@
 import {
   TicketRecord,
   DriverMasterRecord,
-  MaterialMasterRecord,
   CompanySettings,
   LoadingSlipItem,
 } from '../types';
@@ -68,7 +67,6 @@ export function createEmpty8Rows(): LoadingSlipItem[] {
 // In-memory cache synchronized with authenticated backend API (wiped on logout)
 let cacheTickets: TicketRecord[] = [];
 let cacheDrivers: DriverMasterRecord[] = [];
-let cacheMaterials: MaterialMasterRecord[] = [];
 let cacheSettings: CompanySettings = DEFAULT_SETTINGS;
 let cacheDefaultSettings: CompanySettings = DEFAULT_SETTINGS;
 
@@ -77,7 +75,6 @@ export const StorageService = {
   hydrateFromServer(payload: {
     tickets?: TicketRecord[];
     drivers?: DriverMasterRecord[];
-    materials?: MaterialMasterRecord[];
     settings?: CompanySettings | null;
     defaultSettings?: CompanySettings | null;
   }): void {
@@ -93,9 +90,6 @@ export const StorageService = {
         driverPhone: formatSaudiPhoneNumber(d.driverPhone),
       }));
     }
-    if (payload.materials) {
-      cacheMaterials = payload.materials;
-    }
     if (payload.defaultSettings) {
       cacheDefaultSettings = { ...DEFAULT_SETTINGS, ...payload.defaultSettings };
     }
@@ -107,17 +101,8 @@ export const StorageService = {
   clearCache(): void {
     cacheTickets = [];
     cacheDrivers = [];
-    cacheMaterials = [];
     cacheSettings = DEFAULT_SETTINGS;
     cacheDefaultSettings = DEFAULT_SETTINGS;
-  },
-
-  getMaterials(): MaterialMasterRecord[] {
-    return cacheMaterials;
-  },
-
-  saveMaterials(materials: MaterialMasterRecord[]): void {
-    cacheMaterials = materials;
   },
 
   getDefaultSettings(): CompanySettings {

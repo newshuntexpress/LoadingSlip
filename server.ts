@@ -44,13 +44,6 @@ import {
 import { liquidRouter } from './server/liquid.ts';
 import { exFactoryRouter } from './server/exFactory.ts';
 import {
-  materialsRouter,
-  normalizeMaterialMasterRow,
-  normalizePackType,
-  syncMissingMaterialsFromLoadingSlip,
-  type DbMaterialMasterRow,
-} from './server/materials.ts';
-import {
   upperStr,
   normalizeTicketRecord,
   normalizeDriverRecord,
@@ -2106,16 +2099,6 @@ app.patch(
         upsertDriverMasterInternal(merged);
       }
 
-      const autoSavedMaterials =
-        cleanUpdates.loadingSlip && merged.loadingSlip?.items
-          ? syncMissingMaterialsFromLoadingSlip(
-              merged.loadingSlip.items,
-              req.auth!.user.username,
-              req.auth!.user.id,
-              getClientIp(req)
-            ).addedMaterials
-          : [];
-
       const refreshedRow = db.prepare(`SELECT data_json FROM tickets WHERE id = ?`).get(ticketId) as { data_json: string };
       const driverStatusToken = getDriverSlipToken(ticketId);
       const finalTicket = normalizeTicketRecord({
@@ -2130,7 +2113,6 @@ app.patch(
         ticket: finalTicket,
         slipSaved: Boolean(cleanUpdates.loadingSlip),
         isNewLoadingSlip,
-        autoSavedMaterials,
       };
     })();
 
@@ -2188,9 +2170,6 @@ app.patch(
     res.json({
       ticket: result.ticket,
       ...(whatsappNotification ? { whatsappNotification } : {}),
-      ...(result.autoSavedMaterials && result.autoSavedMaterials.length > 0
-        ? { autoSavedMaterials: result.autoSavedMaterials }
-        : {}),
     });
   }
 );
@@ -3286,14 +3265,9 @@ app.get(
       | { value_json: string }
       | undefined;
 
-    const materialMaster = (
-      db.prepare(`SELECT * FROM material_master ORDER BY material_name COLLATE NOCASE ASC`).all() as DbMaterialMasterRow[]
-    ).map(normalizeMaterialMasterRow);
-
     res.json({
       tickets,
       drivers,
-      materialMaster,
       settings: activeRow ? normalizeSettingsRecord(JSON.parse(activeRow.value_json)) : undefined,
       defaultSettings: defaultRow ? normalizeSettingsRecord(JSON.parse(defaultRow.value_json)) : undefined,
       exportedAt: new Date().toISOString(),
@@ -3302,7 +3276,7 @@ app.get(
 );
 
 app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf, requireAdmin, (req: Request, res: Response) => {
-  const { tickets, drivers, materialMaster, settings, defaultSettings } = req.body || {};
+  const { tickets, drivers, settings, defaultSettings } = req.body || {};
   const now = Date.now();
 
   db.transaction(() => {
@@ -3341,31 +3315,6 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
         }
       }
     }
-    if (Array.isArray(materialMaster)) {
-      db.prepare(`DELETE FROM material_master`).run();
-      const insertMat = db.prepare(
-        `INSERT OR REPLACE INTO material_master (id, material_name, pack_type, pallet_ratio, remarks, created_by, updated_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      );
-      for (const m of materialMaster) {
-        const name = upperStr(m?.materialName).slice(0, 120);
-        if (m && name) {
-          const pack = normalizePackType(m.packType) || 'Rolls';
-          const ratio = Math.max(1, Math.min(10000, Math.round(Number(m.palletRatio) || 23)));
-          insertMat.run(
-            String(m.id || `mat-${now}-${crypto.randomBytes(3).toString('hex')}`),
-            name,
-            pack,
-            ratio,
-            upperStr(m.remarks).slice(0, 160),
-            String(m.createdBy || req.auth!.user.username),
-            req.auth!.user.username,
-            Number(m.createdAt) || now,
-            Number(m.updatedAt) || now
-          );
-        }
-      }
-    }
     if (settings && typeof settings === 'object') {
       db.prepare(
         `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('active', ?, ?, ?)`
@@ -3392,7 +3341,6 @@ app.post('/api/backup/restore', requireAuth, requirePasswordChanged, requireCsrf
 
 app.use('/api/liquid', liquidRouter);
 app.use('/api/ex-factory', exFactoryRouter);
-app.use('/api/materials', materialsRouter);
 
 const SERVER_BOOT_AT = Date.now();
 let cachedBuildInfo: { buildId: string; version: string; computedAt: number } | null = null;

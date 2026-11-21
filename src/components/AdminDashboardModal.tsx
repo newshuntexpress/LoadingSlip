@@ -40,8 +40,6 @@ const USER_ASSIGNABLE_PERMISSIONS = [
   { key: 'tickets.delete', label: 'Delete / Restore Tickets' },
   { key: 'slips.print', label: 'Print / Export PDF Slips & Tokens' },
   { key: 'drivers.manage', label: 'Manage Driver & Vehicle Master' },
-  { key: 'materials.view', label: 'Material Master (Loading Slip Auto-Fill): View & Search' },
-  { key: 'materials.manage', label: 'Material Master (Loading Slip Auto-Fill): Add / Edit / Delete' },
   { key: 'reports.view', label: 'View & Export Daily Reports' },
   { key: 'dispatch.view', label: 'Dispatch Details: View & Export Summary' },
   { key: 'material_register.view', label: 'Material Register (Dispatch Items): View & Export' },
@@ -56,7 +54,6 @@ const USER_ASSIGNABLE_PERMISSIONS = [
 
 const VIEW_ONLY_PERMS = [
   'tickets.view',
-  'materials.view',
   'dispatch.view',
   'material_register.view',
   'reports.view',
@@ -66,7 +63,6 @@ const VIEW_ONLY_PERMS = [
 
 const VIEW_ONLY_ASSIGNABLE_PERMISSIONS = [
   { key: 'tickets.view', label: 'Gate Queue & Tickets (View Only)' },
-  { key: 'materials.view', label: 'Material Master (View Only)' },
   { key: 'dispatch.view', label: 'Dispatch Details Summary (View Only)' },
   { key: 'material_register.view', label: 'Material Register (View Only)' },
   { key: 'reports.view', label: 'Daily Reports & Export (View Only)' },
@@ -79,8 +75,6 @@ const DEFAULT_USER_PERMS = [
   'tickets.create',
   'tickets.update',
   'slips.print',
-  'materials.view',
-  'materials.manage',
   'reports.view',
   'dispatch.view',
   'material_register.view',
@@ -99,8 +93,6 @@ const DEFAULT_MMD_MANAGER_PERMS = [
   'forklift.operate',
   'slips.print',
   'drivers.manage',
-  'materials.view',
-  'materials.manage',
   'reports.view',
   'dispatch.view',
   'material_register.view',

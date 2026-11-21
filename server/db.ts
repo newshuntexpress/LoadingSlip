@@ -284,20 +284,6 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_wa_logs_ticket_type ON whatsapp_notification_logs(ticket_id, message_type);
   CREATE INDEX IF NOT EXISTS idx_wa_logs_created_at ON whatsapp_notification_logs(created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS material_master (
-    id TEXT PRIMARY KEY,
-    material_name TEXT UNIQUE NOT NULL COLLATE NOCASE,
-    pack_type TEXT NOT NULL,
-    pallet_ratio INTEGER NOT NULL DEFAULT 23,
-    remarks TEXT DEFAULT '',
-    created_by TEXT,
-    updated_by TEXT,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_material_master_name ON material_master(material_name);
 `);
 
 // Safe additive schema migrations for existing databases
@@ -342,8 +328,6 @@ const SEED_PERMISSIONS: Array<{ id: string; key: string; name: string; category:
   { id: 'perm_tickets_delete', key: 'tickets.delete', name: 'Delete Ticket Records', category: 'Operations' },
   { id: 'perm_slips_print', key: 'slips.print', name: 'Print & Export Loading Slips / Tokens', category: 'Documents' },
   { id: 'perm_drivers_manage', key: 'drivers.manage', name: 'Manage Driver & Vehicle Master Directory', category: 'Operations' },
-  { id: 'perm_materials_view', key: 'materials.view', name: 'View Material Master (Search & Auto-Fill Lookup)', category: 'Operations' },
-  { id: 'perm_materials_manage', key: 'materials.manage', name: 'Manage Material Master (Add / Edit / Delete Materials)', category: 'Operations' },
   { id: 'perm_reports_view', key: 'reports.view', name: 'View Daily Reports & Export CSV', category: 'Reporting' },
   { id: 'perm_dispatch_view', key: 'dispatch.view', name: 'View Dispatch Details (Material-Wise Summary & Export)', category: 'Reporting' },
   { id: 'perm_material_register_view', key: 'material_register.view', name: 'View Material Register (Loading Slip Line Items)', category: 'Reporting' },
@@ -366,8 +350,6 @@ const USER_DEFAULT_PERMISSION_KEYS = [
   'forklift.operate',
   'slips.print',
   'drivers.manage',
-  'materials.view',
-  'materials.manage',
   'reports.view',
   'dispatch.view',
   'material_register.view',
@@ -386,8 +368,6 @@ export const MMD_MANAGER_DEFAULT_PERMISSION_KEYS = [
   'forklift.operate',
   'slips.print',
   'drivers.manage',
-  'materials.view',
-  'materials.manage',
   'reports.view',
   'dispatch.view',
   'material_register.view',
@@ -401,7 +381,6 @@ export const MMD_MANAGER_DEFAULT_PERMISSION_KEYS = [
 
 export const VIEW_ONLY_ALLOWED_PERMISSION_KEYS = [
   'tickets.view',
-  'materials.view',
   'dispatch.view',
   'material_register.view',
   'reports.view',
@@ -417,8 +396,6 @@ export const USER_ASSIGNABLE_PERMISSION_KEYS = [
   'tickets.delete',
   'slips.print',
   'drivers.manage',
-  'materials.view',
-  'materials.manage',
   'reports.view',
   'dispatch.view',
   'material_register.view',
@@ -572,47 +549,9 @@ function seedDatabase(): void {
     })();
   }
 
-  // One-time migration: grant materials.view & materials.manage to existing non-admin users with operational ticket permissions
-  const rbacMaterialMasterSynced = db
-    .prepare(`SELECT key FROM app_settings WHERE key = 'rbac_material_master_v1'`)
-    .get() as { key: string } | undefined;
-  if (!rbacMaterialMasterSynced) {
-    db.transaction(() => {
-      const existingUsers = db
-        .prepare(
-          `SELECT u.id, r.name as role_name FROM users u INNER JOIN roles r ON r.id = u.role_id`
-        )
-        .all() as Array<{ id: string; role_name: string }>;
-      const insertUserPerm = db.prepare(
-        `INSERT OR IGNORE INTO user_permissions (user_id, permission_key, granted) VALUES (?, ?, 1)`
-      );
-      for (const u of existingUsers) {
-        if (u.role_name === 'admin' || u.role_name === 'forklift_operator' || u.role_name === 'liquid_store_operator' || u.role_name === 'ex_factory_operator') {
-          continue;
-        }
-        const overrides = db
-          .prepare(`SELECT permission_key, granted FROM user_permissions WHERE user_id = ?`)
-          .all(u.id) as Array<{ permission_key: string; granted: number }>;
-        if (overrides.length === 0) continue;
-        const grantedSet = new Set(overrides.filter((o) => o.granted === 1).map((o) => o.permission_key));
-        if (u.role_name === 'view_only') {
-          if (grantedSet.has('tickets.view') || grantedSet.has('dispatch.view') || grantedSet.has('material_register.view')) {
-            insertUserPerm.run(u.id, 'materials.view');
-          }
-        } else {
-          if (grantedSet.has('tickets.view') || grantedSet.has('dispatch.view') || grantedSet.has('material_register.view')) {
-            insertUserPerm.run(u.id, 'materials.view');
-          }
-          if (grantedSet.has('tickets.update') || grantedSet.has('drivers.manage')) {
-            insertUserPerm.run(u.id, 'materials.manage');
-          }
-        }
-      }
-      db.prepare(
-        `INSERT OR REPLACE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('rbac_material_master_v1', ?, 'system', ?)`
-      ).run(JSON.stringify({ version: 1 }), now);
-    })();
-  }
+  // Remove deprecated Material Master permissions if previously seeded
+  db.prepare(`DELETE FROM permissions WHERE key IN ('materials.view', 'materials.manage')`).run();
+  db.prepare(`DELETE FROM user_permissions WHERE permission_key IN ('materials.view', 'materials.manage')`).run();
 
   const insertSettings = db.prepare(
     `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES (?, ?, ?, ?)`
@@ -715,33 +654,6 @@ function seedDatabase(): void {
 
       db.prepare(
         `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('default_records_seeded', ?, 'system', ?)`
-      ).run(JSON.stringify({ version: 1 }), now);
-    })();
-  }
-
-  // Seed starter Material Master records once if empty
-  const matSeededMarker = db
-    .prepare(`SELECT key FROM app_settings WHERE key = 'material_master_seeded_v1'`)
-    .get() as { key: string } | undefined;
-  if (!matSeededMarker) {
-    db.transaction(() => {
-      const matCnt = (db.prepare(`SELECT COUNT(*) as cnt FROM material_master`).get() as { cnt: number }).cnt;
-      if (matCnt === 0) {
-        const insertMat = db.prepare(
-          `INSERT OR IGNORE INTO material_master (id, material_name, pack_type, pallet_ratio, remarks, created_by, updated_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'system', 'system', ?, ?)`
-        );
-        const starterMaterials = [
-          { id: 'mat-seed-ds40200', name: 'DS40200', pack: 'Rolls', ratio: 23, remarks: 'Bituminous Waterproofing Membrane' },
-          { id: 'mat-seed-ds40250', name: 'DS40250', pack: 'Rolls', ratio: 23, remarks: 'Bituminous Waterproofing Membrane' },
-          { id: 'mat-seed-ms60', name: 'MS60', pack: 'Board', ratio: 100, remarks: 'Protection Board' },
-        ];
-        for (const m of starterMaterials) {
-          insertMat.run(m.id, m.name, m.pack, m.ratio, m.remarks, now, now);
-        }
-      }
-      db.prepare(
-        `INSERT OR IGNORE INTO app_settings (key, value_json, updated_by, updated_at) VALUES ('material_master_seeded_v1', ?, 'system', ?)`
       ).run(JSON.stringify({ version: 1 }), now);
     })();
   }

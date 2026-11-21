@@ -97,18 +97,6 @@ export interface DriverMasterRecord {
   tripCount: number;
 }
 
-export interface MaterialMasterRecord {
-  id: string;
-  materialName: string;
-  packType: string;
-  palletRatio: number;
-  remarks?: string;
-  createdBy?: string;
-  updatedBy?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export interface CompanySettings {
   companyName: string;
   companySubtitle: string;

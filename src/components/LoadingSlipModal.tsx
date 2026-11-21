@@ -1,17 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useState } from 'react';
 import {
   TicketRecord,
   LoadingSlipData,
   LoadingSlipItem,
   CompanySettings,
-  MaterialMasterRecord,
 } from '../types';
-import { createEmpty8Rows, getCurrentTimeString, StorageService } from '../services/storage';
-import { ApiClient } from '../services/api';
+import { createEmpty8Rows, getCurrentTimeString } from '../services/storage';
 import { formatSaudiPhoneNumber } from '../utils/whatsapp';
 import { buildDriverLiveStatusUrl, generateQrPngDataUrl } from '../utils/driverStatusUrl';
-import { FileText, Save, Printer, X, Trash2, AlertCircle, AlertTriangle, Clock, QrCode, Maximize2, Search, CheckCircle2, Sparkles } from 'lucide-react';
+import { FileText, Save, Printer, X, Trash2, AlertCircle, Clock, QrCode, Maximize2 } from 'lucide-react';
 
 export const PACK_DROPDOWN_OPTIONS = [
   'Can',
@@ -27,7 +24,6 @@ export const PACK_DROPDOWN_OPTIONS = [
 interface LoadingSlipModalProps {
   ticket: TicketRecord;
   settings: CompanySettings;
-  materials?: MaterialMasterRecord[];
   currentUserId?: string;
   storeInchargeFullName?: string;
   storeInchargeSignatureDataUrl?: string;
@@ -39,7 +35,6 @@ interface LoadingSlipModalProps {
 export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   ticket,
   settings,
-  materials: materialsProp,
   currentUserId,
   storeInchargeFullName,
   storeInchargeSignatureDataUrl,
@@ -142,176 +137,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   // Ratio for auto-calculating pallets & loose rolls (Default / Preset: 23 rolls per pallet)
   const [rollsPerPallet, setRollsPerPallet] = useState<number>(23);
 
-  // Material Master cache + live sync for auto-search & auto-fill
-  const [materials, setMaterials] = useState<MaterialMasterRecord[]>(() =>
-    materialsProp && materialsProp.length > 0 ? materialsProp : StorageService.getMaterials()
-  );
-  const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
-  const [highlightedIdx, setHighlightedIdx] = useState<number>(0);
-  const [manualMatchWarningRows, setManualMatchWarningRows] = useState<Record<number, MaterialMasterRecord>>({});
-  const [dropdownRect, setDropdownRect] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    openUp: boolean;
-  } | null>(null);
-  const descInputRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (materialsProp && materialsProp.length > 0) {
-      setMaterials(materialsProp);
-    }
-  }, [materialsProp]);
-
-  useEffect(() => {
-    let active = true;
-    ApiClient.getMaterials()
-      .then((list) => {
-        if (!active) return;
-        setMaterials(list);
-        StorageService.saveMaterials(list);
-      })
-      .catch(() => {
-        // Fallback silently to cached materials
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const materialByNameMap = useMemo(() => {
-    const map = new Map<string, MaterialMasterRecord>();
-    for (const m of materials) {
-      map.set(m.materialName.trim().toUpperCase(), m);
-    }
-    return map;
-  }, [materials]);
-
-  const updateDropdownPosition = (rowIdx: number) => {
-    const inputEl = descInputRefs.current[rowIdx];
-    if (!inputEl) {
-      setDropdownRect(null);
-      return;
-    }
-    const rect = inputEl.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openUp = spaceBelow < 240 && rect.top > 240;
-    setDropdownRect({
-      top: openUp ? rect.top - 4 : rect.bottom + 4,
-      left: rect.left,
-      width: Math.max(rect.width, 340),
-      openUp,
-    });
-  };
-
-  useEffect(() => {
-    if (activeSearchRow === null) return;
-    const reposition = () => updateDropdownPosition(activeSearchRow);
-    reposition();
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
-    return () => {
-      window.removeEventListener('resize', reposition);
-      window.removeEventListener('scroll', reposition, true);
-    };
-  }, [activeSearchRow, materials.length]);
-
-  const activeSuggestions = useMemo(() => {
-    if (activeSearchRow === null) return [];
-    const q = (items[activeSearchRow]?.description || '').trim().toLowerCase();
-    if (!q) {
-      return [...materials]
-        .sort((a, b) => a.materialName.localeCompare(b.materialName))
-        .slice(0, 50);
-    }
-
-    const scored: Array<{ mat: MaterialMasterRecord; tier: number }> = [];
-    for (const m of materials) {
-      const nameLower = m.materialName.toLowerCase();
-      if (nameLower.startsWith(q)) {
-        scored.push({ mat: m, tier: 0 });
-        continue;
-      }
-      const wordMatch = nameLower.split(/[\s\-_/.,()]+/).some((w) => w.startsWith(q));
-      if (wordMatch) {
-        scored.push({ mat: m, tier: 1 });
-        continue;
-      }
-      if (nameLower.includes(q)) {
-        scored.push({ mat: m, tier: 2 });
-        continue;
-      }
-      // Match Pack Type or Remarks only for 2+ chars (so 1st-letter search stays focused on material names)
-      if (
-        q.length >= 2 &&
-        (m.packType.toLowerCase().includes(q) || (m.remarks || '').toLowerCase().includes(q))
-      ) {
-        scored.push({ mat: m, tier: 3 });
-      }
-    }
-
-    // Fallback: if 1st letter had zero name matches, also check packType / remarks
-    if (scored.length === 0) {
-      for (const m of materials) {
-        if (m.packType.toLowerCase().includes(q) || (m.remarks || '').toLowerCase().includes(q)) {
-          scored.push({ mat: m, tier: 4 });
-        }
-      }
-    }
-
-    return scored
-      .sort((a, b) => (a.tier !== b.tier ? a.tier - b.tier : a.mat.materialName.localeCompare(b.mat.materialName)))
-      .slice(0, 50)
-      .map((entry) => entry.mat);
-  }, [activeSearchRow, items, materials]);
-
-  const applyMaterialToRow = (index: number, mat: MaterialMasterRecord) => {
-    if (isSlipLocked) return;
-    setItems((prev) => {
-      const updated = [...prev];
-      const existingRow = updated[index];
-      const ratioStr = String(Math.max(1, mat.palletRatio || 23));
-      const nextRow: LoadingSlipItem = {
-        ...existingRow,
-        description: mat.materialName,
-        pack: mat.packType,
-        palletRatio: ratioStr,
-        remarks: existingRow.remarks?.trim() ? existingRow.remarks : (mat.remarks || ''),
-      };
-      const numQty = extractNumeric(nextRow.qty);
-      const numRatio = extractNumeric(ratioStr);
-      if (numQty > 0 && numRatio > 0) {
-        nextRow.pallets = String(Math.floor(numQty / numRatio));
-        nextRow.looseRolls = String(numQty % numRatio);
-      }
-      updated[index] = nextRow;
-      return updated;
-    });
-    setManualMatchWarningRows((prev) => {
-      if (!prev[index]) return prev;
-      const next = { ...prev };
-      delete next[index];
-      return next;
-    });
-    setActiveSearchRow(null);
-    setDropdownRect(null);
-  };
-
   const handleRowChange = (index: number, field: keyof LoadingSlipItem, value: string) => {
-    if (field === 'description') {
-      const matchedManual = materialByNameMap.get(value.trim().toUpperCase());
-      setManualMatchWarningRows((prev) => {
-        if (matchedManual) {
-          return { ...prev, [index]: matchedManual };
-        }
-        if (!prev[index]) return prev;
-        const next = { ...prev };
-        delete next[index];
-        return next;
-      });
-    }
-
     setItems((prev) => {
       const updated = [...prev];
       const nextVal = field === 'pack' && (value === '' || PACK_DROPDOWN_OPTIONS.includes(value)) ? value : value.toUpperCase();
@@ -319,25 +145,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
         ...updated[index],
         [field]: nextVal,
       };
-
-      // Auto-fill Pack Type, Auto-Pallet Ratio & Remarks as soon as typed Material Name matches Material Master
-      if (field === 'description') {
-        const matched = materialByNameMap.get(nextVal.trim().toUpperCase());
-        if (matched) {
-          const ratioStr = String(Math.max(1, matched.palletRatio || 23));
-          currentRow.pack = matched.packType;
-          currentRow.palletRatio = ratioStr;
-          if (!currentRow.remarks?.trim() && matched.remarks) {
-            currentRow.remarks = matched.remarks;
-          }
-          const numQty = extractNumeric(currentRow.qty);
-          const numRatio = extractNumeric(ratioStr);
-          if (numQty > 0 && numRatio > 0) {
-            currentRow.pallets = String(Math.floor(numQty / numRatio));
-            currentRow.looseRolls = String(numQty % numRatio);
-          }
-        }
-      }
 
       // Automatic Pallet & Loose Roll calculation when Quantity is entered:
       // Uses THIS row's own Auto-Pallet Ratio (defaults to 23 or rollsPerPallet)
@@ -414,12 +221,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
   };
 
   const handleClearRow = (index: number) => {
-    setManualMatchWarningRows((prev) => {
-      if (!prev[index]) return prev;
-      const next = { ...prev };
-      delete next[index];
-      return next;
-    });
     setItems((prev) => {
       const updated = [...prev];
       updated[index] = {
@@ -435,49 +236,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
       return updated;
     });
   };
-
-  // Detect new materials (not yet in Material Master) and duplicate names inside the slip
-  const slipMaterialAnalysis = useMemo(() => {
-    const newMaterialsToAutoSave: Array<{ name: string; packType: string; palletRatio: number }> = [];
-    const seenNew = new Set<string>();
-    const seenAllRows = new Map<string, number>();
-    const intraSlipDuplicates: Array<{ rowNumber: number; firstRowNumber: number; name: string }> = [];
-
-    items.forEach((row, idx) => {
-      const cleanName = (row.description || '').trim().toUpperCase();
-      if (!cleanName) return;
-
-      const prevRow = seenAllRows.get(cleanName);
-      if (prevRow !== undefined) {
-        intraSlipDuplicates.push({ rowNumber: idx + 1, firstRowNumber: prevRow, name: cleanName });
-      } else {
-        seenAllRows.set(cleanName, idx + 1);
-      }
-
-      if (!materialByNameMap.has(cleanName) && !seenNew.has(cleanName)) {
-        seenNew.add(cleanName);
-        const rawPack = (row.pack || '').trim();
-        const packType = rawPack || 'Rolls';
-        const ratioNum = Math.round(extractNumeric(row.palletRatio) || rollsPerPallet || 23);
-        newMaterialsToAutoSave.push({
-          name: cleanName,
-          packType,
-          palletRatio: Math.max(1, ratioNum),
-        });
-      }
-    });
-
-    const manualDuplicates = Object.entries(manualMatchWarningRows).map(([idxStr, mat]) => ({
-      rowNumber: Number(idxStr) + 1,
-      material: mat,
-    }));
-
-    return {
-      newMaterialsToAutoSave,
-      intraSlipDuplicates,
-      manualDuplicates,
-    };
-  }, [items, materialByNameMap, manualMatchWarningRows, rollsPerPallet]);
 
   const buildSlipData = (): LoadingSlipData => {
     return {
@@ -712,13 +470,13 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
 
           {/* 8-Rows Table */}
           <div className="border border-neutral-300 rounded-xl overflow-hidden shadow-sm">
-            <div ref={tableScrollRef} className="overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-xs">
                 <thead>
                   <tr className="bg-neutral-800 text-white text-[11px] uppercase tracking-wider">
                     <th className="py-2.5 px-2 text-center w-8">#</th>
-                    <th className="py-2.5 px-3 min-w-[210px]">
-                      Material Description * <span className="text-[9.5px] font-semibold text-amber-300 lowercase">(type to search master)</span>
+                    <th className="py-2.5 px-3 min-w-[200px]">
+                      Material Description *
                     </th>
                     <th className="py-2.5 px-2 w-32">
                       Pack Type (Dropdown)
@@ -740,113 +498,20 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200">
-                  {items.map((row, index) => {
-                    const cleanDesc = (row.description || '').trim().toUpperCase();
-                    const matchedMaster = cleanDesc ? materialByNameMap.get(cleanDesc) : undefined;
-                    const isNewMaterial = Boolean(cleanDesc && !matchedMaster);
-                    const hasManualDupWarn = Boolean(manualMatchWarningRows[index]);
-                    return (
+                  {items.map((row, index) => (
                     <tr key={index} className={index % 2 === 1 ? 'bg-neutral-50/70' : 'bg-white'}>
                       <td className="py-2 px-2 text-center font-bold text-neutral-600 bg-neutral-100/60">
                         {index + 1}
                       </td>
                       <td className="py-1 px-2">
-                        <div className="relative">
-                          <Search className="w-3 h-3 text-neutral-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          <input
-                            ref={(el) => {
-                              descInputRefs.current[index] = el;
-                            }}
-                            type="text"
-                            value={row.description}
-                            disabled={isSlipLocked}
-                            onFocus={() => {
-                              if (isSlipLocked) return;
-                              setActiveSearchRow(index);
-                              setHighlightedIdx(0);
-                              updateDropdownPosition(index);
-                            }}
-                            onBlur={() => {
-                              setTimeout(() => {
-                                setActiveSearchRow((prev) => (prev === index ? null : prev));
-                              }, 140);
-                            }}
-                            onChange={(e) => {
-                              handleRowChange(index, 'description', e.target.value);
-                              if (!isSlipLocked) {
-                                setActiveSearchRow(index);
-                                setHighlightedIdx(0);
-                                updateDropdownPosition(index);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (activeSearchRow !== index || activeSuggestions.length === 0) return;
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                setHighlightedIdx((prev) => (prev + 1) % activeSuggestions.length);
-                              } else if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                setHighlightedIdx((prev) =>
-                                  prev - 1 < 0 ? activeSuggestions.length - 1 : prev - 1
-                                );
-                              } else if (e.key === 'Enter') {
-                                const pick = activeSuggestions[highlightedIdx] || activeSuggestions[0];
-                                if (pick) {
-                                  e.preventDefault();
-                                  applyMaterialToRow(index, pick);
-                                }
-                              } else if (
-                                e.key === 'Tab' &&
-                                cleanDesc.length >= 1 &&
-                                !matchedMaster &&
-                                activeSuggestions[highlightedIdx]
-                              ) {
-                                e.preventDefault();
-                                applyMaterialToRow(index, activeSuggestions[highlightedIdx]);
-                              } else if (e.key === 'Escape') {
-                                setActiveSearchRow(null);
-                                setDropdownRect(null);
-                              }
-                            }}
-                            placeholder={`Search or type new material #${index + 1}...`}
-                            title={
-                              matchedMaster
-                                ? `Warning: "${matchedMaster.materialName}" is already saved in Material Master (${matchedMaster.packType}, 1 Pallet = ${matchedMaster.palletRatio}). Duplicate will not be saved.`
-                                : isNewMaterial
-                                  ? 'New material: will be automatically saved to Material Master when Loading Slip is saved'
-                                  : 'Type material name to search Material Master or enter a new material'
-                            }
-                            className={`w-full pl-6 ${
-                              hasManualDupWarn
-                                ? 'pr-7 border-amber-500 bg-amber-50/40'
-                                : matchedMaster
-                                  ? 'pr-6 border-emerald-400 bg-emerald-50/30'
-                                  : isNewMaterial
-                                    ? 'pr-12 border-blue-400 bg-blue-50/20'
-                                    : 'pr-2 border-neutral-200 bg-white'
-                            } py-1.5 text-xs font-semibold rounded border focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none`}
-                          />
-                          {matchedMaster && !hasManualDupWarn && (
-                            <CheckCircle2
-                              className="w-3.5 h-3.5 text-emerald-600 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-                              aria-label="Matched Material Master"
-                            />
-                          )}
-                          {hasManualDupWarn && (
-                            <AlertTriangle
-                              className="w-3.5 h-3.5 text-amber-600 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-                              aria-label="Already saved in Material Master"
-                            />
-                          )}
-                          {isNewMaterial && !isSlipLocked && (
-                            <span
-                              title="New material — will be automatically saved to Material Master on save"
-                              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-300 text-[9px] font-black pointer-events-none"
-                            >
-                              NEW
-                            </span>
-                          )}
-                        </div>
+                        <input
+                          type="text"
+                          value={row.description}
+                          disabled={isSlipLocked}
+                          onChange={(e) => handleRowChange(index, 'description', e.target.value)}
+                          placeholder={`e.g. DS40200 (Row #${index + 1})`}
+                          className="w-full px-2.5 py-1.5 text-xs font-semibold rounded border border-neutral-200 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                        />
                       </td>
                       <td className="py-1 px-2">
                         <div className="space-y-1">
@@ -963,8 +628,7 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
                         </button>
                       </td>
                     </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
 
                 {/* Auto Calculated Totals Row */}
@@ -1073,62 +737,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Material Master Duplicate Warnings & Auto-Save Notices */}
-          {!isSlipLocked && (
-            <div className="space-y-2">
-              {slipMaterialAnalysis.manualDuplicates.length > 0 && (
-                <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <div className="font-extrabold">
-                      Warning: Material already saved in Material Master (Duplicate names will not be saved):
-                    </div>
-                    <ul className="list-disc pl-4 text-[11px] text-amber-900">
-                      {slipMaterialAnalysis.manualDuplicates.map((d) => (
-                        <li key={`dup-row-${d.rowNumber}`}>
-                          Row #{d.rowNumber}: <strong>{d.material.materialName}</strong> is already saved in Material Master ({d.material.packType}, 1 Pallet = {d.material.palletRatio}). Existing saved details were auto-applied.
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-
-              {slipMaterialAnalysis.intraSlipDuplicates.length > 0 && (
-                <div className="flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                  <div className="text-[11px]">
-                    <span className="font-extrabold">Warning (Duplicate Row Entry): </span>
-                    {slipMaterialAnalysis.intraSlipDuplicates
-                      .map(
-                        (d) =>
-                          `"${d.name}" on Row #${d.rowNumber} is already entered on Row #${d.firstRowNumber} — it will only be saved once in Material Master.`
-                      )
-                      .join(' ')}
-                  </div>
-                </div>
-              )}
-
-              {slipMaterialAnalysis.newMaterialsToAutoSave.length > 0 && (
-                <div className="flex items-start gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-950">
-                  <Sparkles className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
-                  <div>
-                    <span className="font-extrabold">Auto-Save to Material Master: </span>
-                    <span>
-                      {slipMaterialAnalysis.newMaterialsToAutoSave.length} new material
-                      {slipMaterialAnalysis.newMaterialsToAutoSave.length === 1 ? '' : 's'} not found in Material Master will be automatically saved on Save:{' '}
-                      <strong>
-                        {slipMaterialAnalysis.newMaterialsToAutoSave
-                          .map((m) => `${m.name} (${m.packType}, 1P=${m.palletRatio})`)
-                          .join(', ')}
-                      </strong>
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Status Info & Optional Completion Override */}
           {!isSlipLocked && (
@@ -1251,82 +859,6 @@ export const LoadingSlipModal: React.FC<LoadingSlipModalProps> = ({
           </div>
         </div>
       )}
-
-      {/* Floating Material Master Search Dropdown (Portal so table overflow never clips) */}
-      {activeSearchRow !== null &&
-        !isSlipLocked &&
-        dropdownRect &&
-        activeSuggestions.length > 0 &&
-        createPortal(
-          <div
-            onMouseDown={(e) => e.preventDefault()}
-            style={{
-              position: 'fixed',
-              left: `${Math.min(dropdownRect.left, Math.max(8, window.innerWidth - dropdownRect.width - 8))}px`,
-              width: `${Math.min(dropdownRect.width, window.innerWidth - 16)}px`,
-              ...(dropdownRect.openUp
-                ? { bottom: `${window.innerHeight - dropdownRect.top}px` }
-                : { top: `${dropdownRect.top}px` }),
-            }}
-            className="z-[80] bg-white rounded-xl border border-blue-400 shadow-2xl overflow-hidden"
-          >
-            <div className="px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wider flex items-center justify-between gap-2">
-              <span>Material Master Search (Click or Enter/Tab to Auto-Fill)</span>
-              <span className="text-amber-300 shrink-0">{activeSuggestions.length} matches</span>
-            </div>
-            <div className="max-h-60 overflow-y-auto divide-y divide-neutral-100">
-              {activeSuggestions.map((mat, sIdx) => {
-                const isActive = sIdx === highlightedIdx;
-                const typedQuery = (items[activeSearchRow]?.description || '').trim();
-                const matchPos = typedQuery
-                  ? mat.materialName.toUpperCase().indexOf(typedQuery.toUpperCase())
-                  : -1;
-                return (
-                  <button
-                    key={mat.id}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      applyMaterialToRow(activeSearchRow, mat);
-                    }}
-                    onMouseEnter={() => setHighlightedIdx(sIdx)}
-                    className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 text-xs transition cursor-pointer ${
-                      isActive ? 'bg-blue-50 text-blue-950' : 'bg-white hover:bg-neutral-50 text-neutral-900'
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="font-black text-xs truncate">
-                        {matchPos >= 0 && typedQuery.length > 0 ? (
-                          <>
-                            {mat.materialName.slice(0, matchPos)}
-                            <span className="bg-amber-200 text-neutral-950 px-0.5 rounded-2xs">
-                              {mat.materialName.slice(matchPos, matchPos + typedQuery.length)}
-                            </span>
-                            {mat.materialName.slice(matchPos + typedQuery.length)}
-                          </>
-                        ) : (
-                          mat.materialName
-                        )}
-                      </div>
-                      {mat.remarks && (
-                        <div className="text-[10px] text-neutral-500 truncate">{mat.remarks}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200 font-extrabold text-[10px]">
-                        {mat.packType}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-black text-[10px]">
-                        1P = {mat.palletRatio}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>,
-          document.body
-        )}
     </div>
   );
 };
